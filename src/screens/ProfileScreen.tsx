@@ -12,13 +12,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../../App';
+import { PREMIUM_TIERS, PremiumTier } from '../types/premium';
 
 export function ProfileScreen() {
-  const { user, logout, isPremium } = useContext(UserContext);
+  const { user, logout, premiumTier, updatePremiumTier, nextPackageDate, packagesSent } = useContext(UserContext);
   const [notifications, setNotifications] = useState(true);
   const [newsletter, setNewsletter] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<'silver_monthly' | 'gold_monthly' | 'gold_yearly'>('silver_monthly');
 
   const handleLogout = () => {
     Alert.alert(
@@ -50,6 +52,35 @@ export function ProfileScreen() {
     { label: 'Gespeichert', value: '45', icon: 'bookmark' },
     { label: 'Routine-Tage', value: '15', icon: 'calendar' }
   ];
+
+  const formatDate = (date: Date | null) => {
+    if (!date) return '';
+    return date.toLocaleDateString('de-CH', { 
+      day: 'numeric', 
+      month: 'long', 
+      year: 'numeric' 
+    });
+  };
+
+  const handlePremiumUpgrade = (plan: 'silver_monthly' | 'gold_monthly' | 'gold_yearly') => {
+    // Hier würde Stripe Payment erfolgen
+    Alert.alert(
+      'Premium Upgrade',
+      `${plan} würde hier über Stripe abgewickelt werden.`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        { 
+          text: 'Demo: Upgrade simulieren', 
+          onPress: () => {
+            const newTier = plan.includes('gold') ? 'gold' : 'silver';
+            updatePremiumTier(newTier as PremiumTier);
+            setShowPremiumModal(false);
+            Alert.alert('Erfolg!', `Du bist jetzt ${PREMIUM_TIERS[newTier].name}-Mitglied! 🎉`);
+          }
+        }
+      ]
+    );
+  };
 
   const menuSections = [
     {
@@ -147,10 +178,16 @@ export function ProfileScreen() {
               <Text style={styles.profileName}>{user?.name || 'Demo User'}</Text>
               <Text style={styles.profileEmail}>{user?.email || 'demo@glowmatch.ai'}</Text>
               
-              {isPremium ? (
-                <View style={styles.premiumBadge}>
-                  <Ionicons name="crown" size={16} color="#6b46c1" />
-                  <Text style={styles.premiumBadgeText}>Premium Member</Text>
+              {premiumTier !== 'basic' ? (
+                <View style={[styles.premiumBadge, { backgroundColor: premiumTier === 'gold' ? '#fef3c7' : '#f3f4f6' }]}>
+                  <Ionicons 
+                    name={premiumTier === 'gold' ? 'crown' : 'star'} 
+                    size={16} 
+                    color={premiumTier === 'gold' ? '#f59e0b' : '#6b7280'} 
+                  />
+                  <Text style={[styles.premiumBadgeText, { color: premiumTier === 'gold' ? '#92400e' : '#374151' }]}>
+                    {PREMIUM_TIERS[premiumTier].name} Member
+                  </Text>
                 </View>
               ) : (
                 <TouchableOpacity 
@@ -175,6 +212,33 @@ export function ProfileScreen() {
             ))}
           </View>
         </View>
+
+        {/* Gold Package Info */}
+        {premiumTier === 'gold' && nextPackageDate && (
+          <View style={styles.goldPackageCard}>
+            <View style={styles.goldPackageHeader}>
+              <View style={styles.goldPackageIcon}>
+                <Ionicons name="gift" size={32} color="#f59e0b" />
+              </View>
+              <View style={styles.goldPackageInfo}>
+                <Text style={styles.goldPackageTitle}>Nächstes Selfcare-Paket</Text>
+                <Text style={styles.goldPackageDate}>{formatDate(nextPackageDate)}</Text>
+                <Text style={styles.goldPackageCount}>Paket #{packagesSent + 1}</Text>
+              </View>
+            </View>
+            <View style={styles.goldPackageFeatures}>
+              <Text style={styles.goldPackageFeatureText}>
+                ✨ Personalisiert auf deine aktuelle Haut- & Haaranalyse
+              </Text>
+              <Text style={styles.goldPackageFeatureText}>
+                📦 Kostenloser Versand inklusive
+              </Text>
+              <Text style={styles.goldPackageFeatureText}>
+                🎁 Überraschungsprodukte im Wert von 50+ CHF
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Beauty Profile */}
         <View style={styles.beautyProfileCard}>
@@ -218,7 +282,7 @@ export function ProfileScreen() {
                     <Ionicons name={item.icon} size={20} color="#6b7280" />
                   </View>
                   <Text style={styles.menuItemLabel}>{item.label}</Text>
-                  {item.showPremiumBadge && !isPremium && (
+                  {item.showPremiumBadge && premiumTier === 'basic' && (
                     <View style={styles.premiumIndicator}>
                       <Ionicons name="crown" size={12} color="#6b46c1" />
                     </View>
@@ -274,65 +338,127 @@ export function ProfileScreen() {
               <View style={styles.premiumIcon}>
                 <Ionicons name="crown" size={48} color="#6b46c1" />
               </View>
-              <Text style={styles.premiumTitle}>GlowMatch Premium</Text>
+              <Text style={styles.premiumTitle}>Wähle dein Premium-Paket</Text>
               <Text style={styles.premiumSubtitle}>
                 Schalte alle Features frei und erreiche deine Beauty-Ziele schneller
               </Text>
             </View>
 
-            <View style={styles.premiumFeatures}>
-              {[
-                { icon: 'star', title: 'Unbegrenzte Analysen', description: 'Analysiere Haut & Haare so oft du willst' },
-                { icon: 'trending-up', title: 'Erweiterte Statistiken', description: 'Detaillierte Verlaufsberichte & Trends' },
-                { icon: 'color-palette', title: 'Personalisierte Routinen', description: 'KI-generierte Beauty-Routinen' },
-                { icon: 'notifications', title: 'Smart Reminders', description: 'Erinnerungen für deine Pflegeroutine' },
-                { icon: 'shield-checkmark', title: 'Premium Support', description: 'Prioritäts-Support & Beauty-Beratung' }
-              ].map((feature, index) => (
-                <View key={index} style={styles.premiumFeature}>
-                  <View style={styles.premiumFeatureIcon}>
-                    <Ionicons name={feature.icon} size={24} color="#6b46c1" />
-                  </View>
-                  <View style={styles.premiumFeatureContent}>
-                    <Text style={styles.premiumFeatureTitle}>{feature.title}</Text>
-                    <Text style={styles.premiumFeatureDescription}>{feature.description}</Text>
-                  </View>
+            {/* Premium Tiers */}
+            <View style={styles.tiersContainer}>
+              {/* Silver Tier */}
+              <TouchableOpacity
+                style={[
+                  styles.tierCard,
+                  selectedPlan === 'silver_monthly' && styles.tierCardSelected
+                ]}
+                onPress={() => setSelectedPlan('silver_monthly')}
+              >
+                <View style={styles.tierHeader}>
+                  <Ionicons name="star" size={32} color="#9ca3af" />
+                  <Text style={styles.tierName}>Silber</Text>
+                  <Text style={styles.tierPrice}>CHF 15</Text>
+                  <Text style={styles.tierPeriod}>pro Monat</Text>
                 </View>
-              ))}
-            </View>
-
-            <View style={styles.premiumPricing}>
-              <TouchableOpacity style={styles.pricingOption}>
-                <View style={styles.pricingHeader}>
-                  <Text style={styles.pricingTitle}>Monatlich</Text>
-                  <Text style={styles.pricingPrice}>CHF 15</Text>
+                
+                <View style={styles.tierFeatures}>
+                  {PREMIUM_TIERS.silver.features.map((feature, index) => (
+                    <View key={index} style={styles.tierFeature}>
+                      <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                      <Text style={styles.tierFeatureText}>{feature}</Text>
+                    </View>
+                  ))}
                 </View>
-                <Text style={styles.pricingDescription}>Jederzeit kündbar</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity style={[styles.pricingOption, styles.pricingOptionPopular]}>
+              {/* Gold Monthly */}
+              <TouchableOpacity
+                style={[
+                  styles.tierCard,
+                  styles.tierCardGold,
+                  selectedPlan === 'gold_monthly' && styles.tierCardSelected
+                ]}
+                onPress={() => setSelectedPlan('gold_monthly')}
+              >
                 <View style={styles.popularBadge}>
                   <Text style={styles.popularBadgeText}>BELIEBT</Text>
                 </View>
-                <View style={styles.pricingHeader}>
-                  <Text style={styles.pricingTitle}>Jährlich</Text>
-                  <Text style={styles.pricingPrice}>CHF 120</Text>
+                
+                <View style={styles.tierHeader}>
+                  <Ionicons name="crown" size={32} color="#f59e0b" />
+                  <Text style={styles.tierName}>Gold</Text>
+                  <Text style={styles.tierPrice}>CHF 25</Text>
+                  <Text style={styles.tierPeriod}>pro Monat</Text>
                 </View>
-                <Text style={styles.pricingDescription}>Spare 33% (CHF 10/Monat)</Text>
+                
+                <View style={styles.tierFeatures}>
+                  {PREMIUM_TIERS.gold.features.map((feature, index) => (
+                    <View key={index} style={styles.tierFeature}>
+                      <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                      <Text style={styles.tierFeatureText}>{feature}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={styles.goldSpecialBox}>
+                  <Text style={styles.goldSpecialText}>
+                    {PREMIUM_TIERS.gold.packageInfo}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Gold Yearly */}
+              <TouchableOpacity
+                style={[
+                  styles.tierCard,
+                  styles.tierCardGold,
+                  selectedPlan === 'gold_yearly' && styles.tierCardSelected
+                ]}
+                onPress={() => setSelectedPlan('gold_yearly')}
+              >
+                <View style={styles.saveBadge}>
+                  <Text style={styles.saveBadgeText}>SPARE 17%</Text>
+                </View>
+                
+                <View style={styles.tierHeader}>
+                  <Ionicons name="crown" size={32} color="#f59e0b" />
+                  <Text style={styles.tierName}>Gold Jahresabo</Text>
+                  <Text style={styles.tierPrice}>CHF 250</Text>
+                  <Text style={styles.tierPeriod}>pro Jahr</Text>
+                  <Text style={styles.tierSaving}>Nur CHF 20.83/Monat</Text>
+                </View>
+                
+                <View style={styles.tierFeatures}>
+                  <View style={styles.tierFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                    <Text style={styles.tierFeatureText}>Alle Gold-Features</Text>
+                  </View>
+                  <View style={styles.tierFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                    <Text style={styles.tierFeatureText}>2 Monate gratis</Text>
+                  </View>
+                  <View style={styles.tierFeature}>
+                    <Ionicons name="gift" size={16} color="#f59e0b" />
+                    <Text style={styles.tierFeatureText}>Willkommensgeschenk</Text>
+                  </View>
+                </View>
               </TouchableOpacity>
             </View>
 
             <TouchableOpacity 
               style={styles.subscribeButton}
-              onPress={() => {
-                Alert.alert('Premium', 'Premium-Abonnement würde hier aktiviert werden.');
-                setShowPremiumModal(false);
-              }}
+              onPress={() => handlePremiumUpgrade(selectedPlan)}
             >
-              <Text style={styles.subscribeButtonText}>Jetzt Premium werden</Text>
+              <Text style={styles.subscribeButtonText}>
+                {selectedPlan === 'silver_monthly' ? 'Silber werden für CHF 15/Monat' :
+                 selectedPlan === 'gold_monthly' ? 'Gold werden für CHF 25/Monat' :
+                 'Gold Jahresabo für CHF 250'}
+              </Text>
             </TouchableOpacity>
 
             <Text style={styles.termsText}>
               Mit dem Abschluss stimmst du unseren AGB und Datenschutzbestimmungen zu.
+              Jederzeit kündbar. {selectedPlan === 'gold_yearly' ? 'Keine Rückerstattung bei vorzeitiger Kündigung.' : ''}
             </Text>
           </ScrollView>
         </View>
@@ -422,7 +548,6 @@ const styles = StyleSheet.create({
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#faf5ff',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
@@ -432,7 +557,6 @@ const styles = StyleSheet.create({
   premiumBadgeText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6b46c1',
   },
   upgradeBadge: {
     flexDirection: 'row',
@@ -468,6 +592,55 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  goldPackageCard: {
+    backgroundColor: 'white',
+    marginHorizontal: 24,
+    marginBottom: 24,
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 2,
+    borderColor: '#fbbf24',
+  },
+  goldPackageHeader: {
+    flexDirection: 'row',
+    marginBottom: 20,
+  },
+  goldPackageIcon: {
+    width: 64,
+    height: 64,
+    backgroundColor: '#fef3c7',
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  goldPackageInfo: {
+    flex: 1,
+  },
+  goldPackageTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  goldPackageDate: {
+    fontSize: 16,
+    color: '#f59e0b',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  goldPackageCount: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  goldPackageFeatures: {
+    gap: 8,
+  },
+  goldPackageFeatureText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
   },
   beautyProfileCard: {
     backgroundColor: 'white',
@@ -646,52 +819,76 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
   },
-  premiumFeatures: {
-    paddingHorizontal: 24,
-    marginBottom: 48,
-  },
-  premiumFeature: {
-    flexDirection: 'row',
-    marginBottom: 24,
-  },
-  premiumFeatureIcon: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#faf5ff',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  premiumFeatureContent: {
-    flex: 1,
-  },
-  premiumFeatureTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  premiumFeatureDescription: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  premiumPricing: {
+  tiersContainer: {
     paddingHorizontal: 24,
     gap: 16,
     marginBottom: 32,
   },
-  pricingOption: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
+  tierCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 20,
     padding: 24,
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  pricingOptionPopular: {
+  tierCardSelected: {
     borderColor: '#6b46c1',
     backgroundColor: '#faf5ff',
+  },
+  tierCardGold: {
+    backgroundColor: '#fef3c7',
     position: 'relative',
+  },
+  tierHeader: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  tierName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  tierPrice: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#6b46c1',
+  },
+  tierPeriod: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  tierSaving: {
+    fontSize: 14,
+    color: '#10b981',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  tierFeatures: {
+    gap: 12,
+  },
+  tierFeature: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  tierFeatureText: {
+    fontSize: 14,
+    color: '#374151',
+    flex: 1,
+  },
+  goldSpecialBox: {
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+  },
+  goldSpecialText: {
+    fontSize: 14,
+    color: '#92400e',
+    fontStyle: 'italic',
+    textAlign: 'center',
   },
   popularBadge: {
     position: 'absolute',
@@ -707,25 +904,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: 'bold',
   },
-  pricingHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  saveBadge: {
+    position: 'absolute',
+    top: -12,
+    right: 24,
+    backgroundColor: '#10b981',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
-  pricingTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  pricingPrice: {
-    fontSize: 24,
+  saveBadgeText: {
+    color: 'white',
+    fontSize: 12,
     fontWeight: 'bold',
-    color: '#6b46c1',
-  },
-  pricingDescription: {
-    fontSize: 14,
-    color: '#6b7280',
   },
   subscribeButton: {
     backgroundColor: '#6b46c1',

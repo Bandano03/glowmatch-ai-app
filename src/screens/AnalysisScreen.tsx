@@ -12,14 +12,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../../App';
+import { PREMIUM_TIERS } from '../types/premium';
 
 export function AnalysisScreen() {
-  const { user } = useContext(UserContext);
+  const { user, premiumTier } = useContext(UserContext);
   const [step, setStep] = useState('choice');
   const [analysisType, setAnalysisType] = useState('skin');
   const [inputMethod, setInputMethod] = useState('');
   const [results, setResults] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [monthlyAnalysisCount] = useState(premiumTier === 'basic' ? 2 : 999); // Demo: Basic hat noch 2 Analysen
 
   const analysisTypes = [
     {
@@ -42,7 +44,7 @@ export function AnalysisScreen() {
       description: 'Vollständige Analyse von Haut und Haaren',
       icon: '🌟',
       features: ['Haut + Haar', 'Ganzheitliche Beratung', 'Premium Empfehlungen'],
-      premium: true
+      premium: ['silver', 'gold']
     }
   ];
 
@@ -104,6 +106,18 @@ export function AnalysisScreen() {
   };
 
   const handleAnalysisStart = () => {
+    if (premiumTier === 'basic' && monthlyAnalysisCount <= 0) {
+      Alert.alert(
+        'Analyse-Limit erreicht',
+        'Als Basic-Nutzer hast du nur 3 Analysen pro Monat. Upgrade auf Silber oder Gold für unbegrenzte Analysen!',
+        [
+          { text: 'Später', style: 'cancel' },
+          { text: 'Premium ansehen', onPress: () => {} }
+        ]
+      );
+      return;
+    }
+
     if (inputMethod === 'camera') {
       Alert.alert(
         'Kamera-Zugriff',
@@ -160,6 +174,15 @@ export function AnalysisScreen() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Beauty-Analyse</Text>
         <Text style={styles.headerSubtitle}>Entdecke deinen einzigartigen Beauty-Typ mit KI-Technologie</Text>
+        
+        {premiumTier === 'basic' && (
+          <View style={styles.analysisLimitBanner}>
+            <Ionicons name="information-circle" size={16} color="#f59e0b" />
+            <Text style={styles.analysisLimitText}>
+              {monthlyAnalysisCount} von 3 kostenlosen Analysen diesen Monat verfügbar
+            </Text>
+          </View>
+        )}
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -175,16 +198,19 @@ export function AnalysisScreen() {
                     style={[
                       styles.optionCard,
                       analysisType === type.id && styles.optionCardSelected,
-                      type.premium && !user?.isPremium && styles.optionCardDisabled
+                      type.premium && !type.premium.includes(premiumTier) && styles.optionCardDisabled
                     ]}
                     onPress={() => {
-                      if (type.premium && !user?.isPremium) {
-                        Alert.alert('Premium Feature', 'Diese Funktion ist nur für Premium-Nutzer verfügbar.');
+                      if (type.premium && !type.premium.includes(premiumTier)) {
+                        Alert.alert(
+                          'Premium Feature', 
+                          `Diese Funktion ist ab ${type.premium[0] === 'silver' ? 'Silber' : 'Gold'} verfügbar.`
+                        );
                         return;
                       }
                       setAnalysisType(type.id);
                     }}
-                    disabled={type.premium && !user?.isPremium}
+                    disabled={type.premium && !type.premium.includes(premiumTier)}
                   >
                     <Text style={styles.optionIcon}>{type.icon}</Text>
                     <View style={styles.optionHeader}>
@@ -201,10 +227,12 @@ export function AnalysisScreen() {
                       ))}
                     </View>
                     
-                    {type.premium && !user?.isPremium && (
+                    {type.premium && !type.premium.includes(premiumTier) && (
                       <View style={styles.premiumOverlay}>
                         <Ionicons name="lock-closed" size={32} color="#6b7280" />
-                        <Text style={styles.premiumOverlayText}>Premium Feature</Text>
+                        <Text style={styles.premiumOverlayText}>
+                          Ab {type.premium[0] === 'silver' ? 'Silber' : 'Gold'}
+                        </Text>
                       </View>
                     )}
                   </TouchableOpacity>
@@ -383,6 +411,20 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     fontSize: 16,
     color: '#6b7280',
+  },
+  analysisLimitBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fef3c7',
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 8,
+  },
+  analysisLimitText: {
+    fontSize: 14,
+    color: '#92400e',
+    flex: 1,
   },
   content: {
     flex: 1,

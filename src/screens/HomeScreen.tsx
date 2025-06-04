@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { UserContext } from '../../App';
+import { PREMIUM_TIERS } from '../types/premium';
 
 export function HomeScreen({ navigation }) {
-  const { user } = useContext(UserContext);
+  const { user, premiumTier, nextPackageDate } = useContext(UserContext);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showSavedAnalyses, setShowSavedAnalyses] = useState(false);
 
@@ -42,6 +43,27 @@ export function HomeScreen({ navigation }) {
     }
   ];
 
+  const latestAnalysis = analysisHistory[0];
+  const latestReport = weeklyReports[0];
+
+  const getTrendIcon = (trend) => {
+    switch (trend) {
+      case 'improving': return { name: 'trending-up', color: '#10b981' };
+      case 'declining': return { name: 'trending-down', color: '#ef4444' };
+      default: return { name: 'remove', color: '#6b7280' };
+    }
+  };
+
+  const getScoreColor = (score) => {
+    if (score >= 80) return '#10b981';
+    if (score >= 60) return '#f59e0b';
+    return '#ef4444';
+  };
+
+  const exportToPDF = () => {
+    alert('PDF-Export ist nur für Premium-Nutzer verfügbar!');
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
@@ -59,10 +81,20 @@ export function HomeScreen({ navigation }) {
         </View>
         
         <View style={styles.headerRight}>
-          {user?.isPremium && (
-            <View style={styles.premiumBadge}>
-              <Ionicons name="crown" size={16} color="#6b46c1" />
-              <Text style={styles.premiumText}>Premium</Text>
+          {premiumTier !== 'basic' && (
+            <View style={[styles.premiumBadge, { 
+              backgroundColor: premiumTier === 'gold' ? '#fef3c7' : '#f3f4f6' 
+            }]}>
+              <Ionicons 
+                name={premiumTier === 'gold' ? 'crown' : 'star'} 
+                size={16} 
+                color={premiumTier === 'gold' ? '#f59e0b' : '#6b7280'} 
+              />
+              <Text style={[styles.premiumText, { 
+                color: premiumTier === 'gold' ? '#92400e' : '#374151' 
+              }]}>
+                {PREMIUM_TIERS[premiumTier].name}
+              </Text>
             </View>
           )}
           
@@ -72,13 +104,34 @@ export function HomeScreen({ navigation }) {
             </View>
             <View>
               <Text style={styles.userName}>{user?.name}</Text>
-              <Text style={styles.userStatus}>{user?.isPremium ? 'Premium' : 'Basic'}</Text>
+              <Text style={styles.userStatus}>{PREMIUM_TIERS[premiumTier].name}</Text>
             </View>
           </View>
         </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Gold Package Countdown */}
+        {premiumTier === 'gold' && nextPackageDate && (
+          <TouchableOpacity 
+            style={styles.goldPackageCountdown}
+            onPress={() => navigation.navigate('Profil')}
+          >
+            <View style={styles.goldPackageCountdownContent}>
+              <View style={styles.goldPackageIcon}>
+                <Ionicons name="gift" size={24} color="#f59e0b" />
+              </View>
+              <View style={styles.goldPackageCountdownText}>
+                <Text style={styles.goldPackageCountdownTitle}>Dein nächstes Selfcare-Paket</Text>
+                <Text style={styles.goldPackageCountdownDate}>
+                  in {Math.ceil((nextPackageDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} Tagen
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#f59e0b" />
+          </TouchableOpacity>
+        )}
+
         {/* Daily Tip */}
         {user && dailyTip && (
           <View style={styles.dailyTipCard}>
@@ -209,12 +262,14 @@ export function HomeScreen({ navigation }) {
         </View>
 
         {/* Premium CTA */}
-        {user && !user.isPremium && (
+        {premiumTier === 'basic' && (
           <View style={styles.premiumCard}>
             <View style={styles.premiumContent}>
               <View>
                 <Text style={styles.premiumTitle}>Premium freischalten</Text>
-                <Text style={styles.premiumDescription}>Komplettanalyse, erweiterte Features ab 15 CHF/Monat</Text>
+                <Text style={styles.premiumDescription}>
+                  Wähle zwischen Silber (CHF 15/Monat) oder Gold (CHF 25/Monat) mit exklusiven Paketen
+                </Text>
               </View>
               <Ionicons name="crown" size={32} color="#fbbf24" />
             </View>
@@ -222,7 +277,7 @@ export function HomeScreen({ navigation }) {
               style={styles.premiumButton}
               onPress={() => navigation.navigate('Profil')}
             >
-              <Text style={styles.premiumButtonText}>Jetzt upgraden</Text>
+              <Text style={styles.premiumButtonText}>Pläne ansehen</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -331,7 +386,6 @@ const styles = StyleSheet.create({
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 20,
@@ -340,7 +394,6 @@ const styles = StyleSheet.create({
   premiumText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#6b46c1',
   },
   userInfo: {
     flexDirection: 'row',
@@ -373,6 +426,45 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
     paddingVertical: 16,
+  },
+  goldPackageCountdown: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#fbbf24',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  goldPackageCountdownContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  goldPackageIcon: {
+    width: 48,
+    height: 48,
+    backgroundColor: '#fef3c7',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  goldPackageCountdownText: {
+    flex: 1,
+  },
+  goldPackageCountdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  goldPackageCountdownDate: {
+    fontSize: 14,
+    color: '#f59e0b',
+    fontWeight: '600',
   },
   dailyTipCard: {
     backgroundColor: 'white',

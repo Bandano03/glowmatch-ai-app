@@ -11,26 +11,39 @@ import { AnalysisScreen } from './src/screens/AnalysisScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
 import { ProductsScreen } from './src/screens/ProductsScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { RecipesScreen } from './src/screens/RecipesScreen';
 import { AuthScreen } from './src/screens/AuthScreen';
+
+// Import types
+import { PremiumTier } from './src/types/premium';
 
 const Tab = createBottomTabNavigator();
 
-// Mock user context
+// Enhanced user context with premium tiers
 export const UserContext = React.createContext({
   user: null,
   isLoggedIn: false,
   login: () => {},
   logout: () => {},
-  isPremium: false,
+  premiumTier: 'basic' as PremiumTier,
+  updatePremiumTier: (tier: PremiumTier) => {},
+  purchasedRecipes: [] as string[],
+  addPurchasedRecipe: (recipeId: string) => {},
+  nextPackageDate: null as Date | null,
+  packagesSent: 0,
 });
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [premiumTier, setPremiumTier] = useState<PremiumTier>('basic');
+  const [purchasedRecipes, setPurchasedRecipes] = useState<string[]>([]);
+  const [nextPackageDate, setNextPackageDate] = useState<Date | null>(null);
+  const [packagesSent, setPackagesSent] = useState(0);
 
   useEffect(() => {
-    // Simulate app loading
+    // Simulate app loading and auto-login for demo
     setTimeout(() => {
       setLoading(false);
       // Auto-login for demo purposes
@@ -39,9 +52,14 @@ export default function App() {
         id: '1',
         name: 'Demo User',
         email: 'demo@glowmatch.ai',
-        isPremium: true,
         avatar: 'https://ui-avatars.com/api/?name=Demo+User&background=ec4899&color=fff'
       });
+      // Set demo premium tier to gold to show all features
+      setPremiumTier('gold');
+      // Set next package date for gold members (6 months from now)
+      const nextDate = new Date();
+      nextDate.setMonth(nextDate.getMonth() + 6);
+      setNextPackageDate(nextDate);
     }, 2000);
   }, []);
 
@@ -49,8 +67,27 @@ export default function App() {
     user,
     isLoggedIn,
     login: () => setIsLoggedIn(true),
-    logout: () => setIsLoggedIn(false),
-    isPremium: user?.isPremium || false,
+    logout: () => {
+      setIsLoggedIn(false);
+      setPremiumTier('basic');
+      setPurchasedRecipes([]);
+    },
+    premiumTier,
+    updatePremiumTier: (tier: PremiumTier) => {
+      setPremiumTier(tier);
+      // If upgrading to gold, set next package date
+      if (tier === 'gold') {
+        const nextDate = new Date();
+        nextDate.setMonth(nextDate.getMonth() + 6);
+        setNextPackageDate(nextDate);
+      }
+    },
+    purchasedRecipes,
+    addPurchasedRecipe: (recipeId: string) => {
+      setPurchasedRecipes(prev => [...prev, recipeId]);
+    },
+    nextPackageDate,
+    packagesSent,
   };
 
   if (loading) {
@@ -87,6 +124,9 @@ export default function App() {
                   case 'Analyse':
                     iconName = focused ? 'camera' : 'camera-outline';
                     break;
+                  case 'Rezepte':
+                    iconName = focused ? 'book' : 'book-outline';
+                    break;
                   case 'Verlauf':
                     iconName = focused ? 'time' : 'time-outline';
                     break;
@@ -116,6 +156,7 @@ export default function App() {
           >
             <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Analyse" component={AnalysisScreen} />
+            <Tab.Screen name="Rezepte" component={RecipesScreen} />
             <Tab.Screen name="Verlauf" component={HistoryScreen} />
             <Tab.Screen name="Produkte" component={ProductsScreen} />
             <Tab.Screen name="Profil" component={ProfileScreen} />
