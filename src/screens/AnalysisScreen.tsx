@@ -1,707 +1,900 @@
-import React, { useState, useContext } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
+// src/screens/AnalysisScreen.tsx
+
+import React, { useState, useContext, useEffect } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
   StatusBar,
   Modal,
   Alert,
-  ActivityIndicator
+  ActivityIndicator,
+  Image,
+  Dimensions,
+  Platform,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { UserContext } from '../../App';
-import { PREMIUM_TIERS } from '../types/premium';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
+import * as Progress from 'react-native-progress';
 
+// Services & Hooks
+import { useCamera } from '../hooks/useCamera';
+import { AnalysisService } from '../services/analysisService';
+import { UserContext } from '../../App';
+
+// Types
+import { 
+  SkinAnalysisResult, 
+  HairAnalysisResult, 
+  AnalysisType 
+} from '../types/analysis.types';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+// Komponente für Analyse-Auswahl
+const AnalysisTypeCard = ({ 
+  title, 
+  icon, 
+  gradient, 
+  onPress, 
+  description 
+}: any) => (
+  <TouchableOpacity
+    onPress={onPress}
+    style={styles.analysisCard}
+    activeOpacity={0.8}
+  >
+    <LinearGradient
+      colors={gradient}
+      style={styles.cardGradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+    >
+      <View style={styles.cardContent}>
+        <Ionicons name={icon} size={40} color="#fff" />
+        <Text style={styles.cardTitle}>{title}</Text>
+        <Text style={styles.cardDescription}>{description}</Text>
+      </View>
+    </LinearGradient>
+  </TouchableOpacity>
+);
+
+// Hauptkomponente
 export function AnalysisScreen() {
   const { user, premiumTier } = useContext(UserContext);
-  const [step, setStep] = useState('choice');
-  const [analysisType, setAnalysisType] = useState('skin');
-  const [inputMethod, setInputMethod] = useState('');
-  const [results, setResults] = useState(null);
+  const { selectImage, isLoading: cameraLoading } = useCamera();
+  
+  const [selectedType, setSelectedType] = useState<AnalysisType | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [monthlyAnalysisCount] = useState(premiumTier === 'basic' ? 2 : 999); // Demo: Basic hat noch 2 Analysen
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [results, setResults] = useState<SkinAnalysisResult | HairAnalysisResult | null>(null);
+  const [showResults, setShowResults] = useState(false);
+  const [analysisHistory, setAnalysisHistory] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const analysisTypes = [
-    {
-      id: 'skin',
-      title: 'Hautanalyse',
-      description: 'KI-Analyse deiner Gesichtshaut',
-      icon: '✨',
-      features: ['Hauttyp-Bestimmung', 'Feuchtigkeits-Level', 'Porengröße-Analyse']
-    },
-    {
-      id: 'hair',
-      title: 'Haaranalyse',
-      description: 'Struktur und Gesundheit deiner Haare',
-      icon: '💇‍♀️',
-      features: ['Haartyp-Erkennung', 'Dichte-Messung', 'Glanz & Gesundheit']
-    },
-    {
-      id: 'combined',
-      title: 'Komplettanalyse',
-      description: 'Vollständige Analyse von Haut und Haaren',
-      icon: '🌟',
-      features: ['Haut + Haar', 'Ganzheitliche Beratung', 'Premium Empfehlungen'],
-      premium: ['silver', 'gold']
-    }
-  ];
+  useEffect(() => {
+    loadAnalysisHistory();
+  }, []);
 
-  const inputMethods = [
-    {
-      id: 'camera',
-      title: 'Live-Kamera',
-      description: 'Verwende deine Kamera für eine Live-Analyse',
-      icon: 'camera'
-    },
-    {
-      id: 'upload',
-      title: 'Bild hochladen',
-      description: 'Wähle ein vorhandenes Bild aus deiner Galerie',
-      icon: 'image'
-    }
-  ];
-
-  const mockAnalysis = async () => {
-    setIsAnalyzing(true);
-    
-    // Simulate analysis time
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    
-    const mockResults = {
-      analysisType,
-      skinAnalysis: analysisType === 'skin' || analysisType === 'combined' ? {
-        skinType: ['Normal', 'Trocken', 'Fettig', 'Mischhaut', 'Sensibel'][Math.floor(Math.random() * 5)],
-        hydration: Math.floor(Math.random() * 5) + 1,
-        elasticity: Math.floor(Math.random() * 5) + 1,
-        evenness: Math.floor(Math.random() * 5) + 1,
-        poreSize: Math.floor(Math.random() * 5) + 1,
-        score: Math.floor(Math.random() * 40) + 60,
-        recommendations: [
-          'Sanfte Reinigung morgens und abends',
-          'Feuchtigkeitscreme mit Hyaluronsäure',
-          'Vitamin C Serum für Strahlkraft',
-          'Sonnenschutz LSF 30+ täglich'
-        ]
-      } : null,
-      hairAnalysis: analysisType === 'hair' || analysisType === 'combined' ? {
-        hairType: ['Glatt', 'Wellig', 'Lockig', 'Kraus'][Math.floor(Math.random() * 4)],
-        hairDensity: ['Dünn', 'Normal', 'Dick'][Math.floor(Math.random() * 3)],
-        shineLevel: Math.floor(Math.random() * 5) + 1,
-        healthScore: Math.floor(Math.random() * 30) + 70,
-        recommendations: [
-          'Feuchtigkeitsspendendes Shampoo',
-          'Protein-reiches Conditioner',
-          'Leave-in Behandlung für Spitzen',
-          'Hitzeschutz vor Styling'
-        ]
-      } : null,
-      timestamp: new Date().toISOString()
-    };
-
-    setResults(mockResults);
-    setStep('results');
-    setIsAnalyzing(false);
+  const loadAnalysisHistory = async () => {
+    // Hier würden Sie normalerweise aus der Datenbank laden
+    // Für Demo: Fake History
+    setAnalysisHistory([
+      {
+        id: '1',
+        type: 'skin',
+        date: new Date(Date.now() - 86400000), // Gestern
+        result: { skinType: 'Normal' }
+      },
+      {
+        id: '2',
+        type: 'hair',
+        date: new Date(Date.now() - 172800000), // Vorgestern
+        result: { hairType: '2B' }
+      }
+    ]);
   };
 
-  const handleAnalysisStart = () => {
-    if (premiumTier === 'basic' && monthlyAnalysisCount <= 0) {
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadAnalysisHistory();
+    setRefreshing(false);
+  };
+
+  const handleAnalysisSelect = async (type: AnalysisType) => {
+    // Premium Check
+    if (premiumTier === 'basic' && analysisHistory.length >= 3) {
       Alert.alert(
-        'Analyse-Limit erreicht',
-        'Als Basic-Nutzer hast du nur 3 Analysen pro Monat. Upgrade auf Silber oder Gold für unbegrenzte Analysen!',
+        'Premium erforderlich',
+        'Als Basic-Nutzer können Sie nur 3 Analysen pro Monat durchführen. Upgraden Sie auf Premium für unbegrenzte Analysen!',
         [
           { text: 'Später', style: 'cancel' },
-          { text: 'Premium ansehen', onPress: () => {} }
+          { text: 'Premium werden', onPress: () => console.log('Navigate to Premium') }
         ]
       );
       return;
     }
 
-    if (inputMethod === 'camera') {
-      Alert.alert(
-        'Kamera-Zugriff',
-        'In der echten App würde jetzt die Kamera geöffnet werden.',
-        [
-          { text: 'Abbrechen', style: 'cancel' },
-          { text: 'Simulieren', onPress: mockAnalysis }
-        ]
-      );
-    } else {
-      Alert.alert(
-        'Bild hochladen',
-        'In der echten App würde jetzt die Galerie geöffnet werden.',
-        [
-          { text: 'Abbrechen', style: 'cancel' },
-          { text: 'Simulieren', onPress: mockAnalysis }
-        ]
-      );
+    setSelectedType(type);
+    
+    // Bild aufnehmen
+    const imageResult = await selectImage();
+    
+    if (imageResult.success && imageResult.base64) {
+      await performAnalysis(imageResult.base64, type);
     }
   };
 
-  const resetAnalysis = () => {
-    setStep('choice');
-    setAnalysisType('skin');
-    setInputMethod('');
-    setResults(null);
-  };
+  const performAnalysis = async (imageBase64: string, type: AnalysisType) => {
+    setIsAnalyzing(true);
+    setAnalysisProgress(0);
 
-  const saveAnalysis = () => {
-    Alert.alert('Erfolg!', 'Analyse wurde erfolgreich gespeichert! ✨');
-  };
+    // Simuliere Fortschritt
+    const progressInterval = setInterval(() => {
+      setAnalysisProgress(prev => {
+        if (prev >= 0.9) return prev;
+        return prev + 0.1;
+      });
+    }, 500);
 
-  const getScoreColor = (score) => {
-    if (score >= 80) return '#10b981';
-    if (score >= 60) return '#f59e0b';
-    return '#ef4444';
-  };
-
-  if (isAnalyzing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6b46c1" />
-        <Text style={styles.loadingTitle}>KI-Analyse läuft...</Text>
-        <Text style={styles.loadingSubtitle}>Bitte warten Sie einen Moment</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+    try {
+      // KI-Analyse durchführen
+      console.log('🤖 Starte KI-Analyse...');
+      const analysisResult = await AnalysisService.analyze(imageBase64, type);
       
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Beauty-Analyse</Text>
-        <Text style={styles.headerSubtitle}>Entdecke deinen einzigartigen Beauty-Typ mit KI-Technologie</Text>
+      clearInterval(progressInterval);
+      setAnalysisProgress(1);
+      
+      if (analysisResult.success && analysisResult.data) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setResults(analysisResult.data);
         
-        {premiumTier === 'basic' && (
-          <View style={styles.analysisLimitBanner}>
-            <Ionicons name="information-circle" size={16} color="#f59e0b" />
-            <Text style={styles.analysisLimitText}>
-              {monthlyAnalysisCount} von 3 kostenlosen Analysen diesen Monat verfügbar
-            </Text>
-          </View>
-        )}
-      </View>
+        // Zur History hinzufügen
+        const newHistoryItem = {
+          id: Date.now().toString(),
+          type,
+          date: new Date(),
+          result: analysisResult.data
+        };
+        setAnalysisHistory(prev => [newHistoryItem, ...prev]);
+        
+        setTimeout(() => {
+          setIsAnalyzing(false);
+          setShowResults(true);
+        }, 500);
+      } else {
+        throw new Error(analysisResult.error?.message || 'Analyse fehlgeschlagen');
+      }
+      
+    } catch (error) {
+      clearInterval(progressInterval);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      Alert.alert(
+        'Analysefehler',
+        'Die Analyse konnte nicht durchgeführt werden. Bitte versuchen Sie es erneut.',
+        [{ text: 'OK' }]
+      );
+      setIsAnalyzing(false);
+    }
+  };
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {step === 'choice' && (
-          <View style={styles.analysisCard}>
-            <View style={styles.stepSection}>
-              <Text style={styles.stepTitle}>Was möchtest du analysieren?</Text>
-              
-              <View style={styles.optionsGrid}>
-                {analysisTypes.map(type => (
-                  <TouchableOpacity
-                    key={type.id}
-                    style={[
-                      styles.optionCard,
-                      analysisType === type.id && styles.optionCardSelected,
-                      type.premium && !type.premium.includes(premiumTier) && styles.optionCardDisabled
-                    ]}
-                    onPress={() => {
-                      if (type.premium && !type.premium.includes(premiumTier)) {
-                        Alert.alert(
-                          'Premium Feature', 
-                          `Diese Funktion ist ab ${type.premium[0] === 'silver' ? 'Silber' : 'Gold'} verfügbar.`
-                        );
-                        return;
-                      }
-                      setAnalysisType(type.id);
-                    }}
-                    disabled={type.premium && !type.premium.includes(premiumTier)}
-                  >
-                    <Text style={styles.optionIcon}>{type.icon}</Text>
-                    <View style={styles.optionHeader}>
-                      <Text style={styles.optionTitle}>{type.title}</Text>
-                      {type.premium && <Ionicons name="crown" size={16} color="#6b46c1" />}
+  const renderAnalyzingModal = () => (
+    <Modal
+      visible={isAnalyzing}
+      animationType="fade"
+      transparent={true}
+    >
+      <View style={styles.analyzingOverlay}>
+        <BlurView intensity={90} style={styles.analyzingContainer}>
+          <View style={styles.analyzingContent}>
+            <Text style={styles.analyzingTitle}>
+              KI-Analyse läuft...
+            </Text>
+            <View style={styles.progressContainer}>
+              <Progress.Bar
+                progress={analysisProgress}
+                width={screenWidth * 0.7}
+                height={8}
+                color="#6b46c1"
+                borderWidth={0}
+                borderRadius={4}
+              />
+              <Text style={styles.progressText}>
+                {Math.round(analysisProgress * 100)}%
+              </Text>
+            </View>
+            <Text style={styles.analyzingSubtext}>
+              {analysisProgress < 0.3 && 'Bild wird verarbeitet...'}
+              {analysisProgress >= 0.3 && analysisProgress < 0.6 && 'KI analysiert Merkmale...'}
+              {analysisProgress >= 0.6 && analysisProgress < 0.9 && 'Erstelle Empfehlungen...'}
+              {analysisProgress >= 0.9 && 'Fast fertig...'}
+            </Text>
+            <ActivityIndicator
+              size="large"
+              color="#6b46c1"
+              style={{ marginTop: 20 }}
+            />
+          </View>
+        </BlurView>
+      </View>
+    </Modal>
+  );
+
+  const renderResultsModal = () => {
+    if (!results || !selectedType) return null;
+
+    const isSkinResult = selectedType === 'skin';
+    const skinResult = results as SkinAnalysisResult;
+    const hairResult = results as HairAnalysisResult;
+
+    return (
+      <Modal
+        visible={showResults}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowResults(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>
+              {isSkinResult ? 'Hautanalyse' : 'Haaranalyse'} Ergebnisse
+            </Text>
+            <TouchableOpacity 
+              onPress={() => setShowResults(false)} 
+              style={styles.closeButton}
+            >
+              <Ionicons name="close" size={28} color="#333" />
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView style={styles.resultsContent}>
+            {/* Hauptergebnis */}
+            <View style={styles.resultSection}>
+              <Text style={styles.resultSectionTitle}>
+                {isSkinResult ? 'Ihr Hauttyp' : 'Ihr Haartyp'}
+              </Text>
+              <View style={styles.resultBox}>
+                <Text style={styles.resultMainText}>
+                  {isSkinResult ? skinResult.skinType : hairResult.hairType}
+                </Text>
+                <Text style={styles.resultSubText}>
+                  {isSkinResult 
+                    ? `Textur: ${skinResult.texture}` 
+                    : `${hairResult.structure} • ${hairResult.thickness}`
+                  }
+                </Text>
+              </View>
+            </View>
+
+            {/* Metriken */}
+            <View style={styles.resultSection}>
+              <Text style={styles.resultSectionTitle}>Detailanalyse</Text>
+              <View style={styles.metricsContainer}>
+                {isSkinResult ? (
+                  <>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Hydration</Text>
+                      <Progress.Circle
+                        size={80}
+                        progress={skinResult.hydration / 100}
+                        showsText={true}
+                        formatText={() => `${skinResult.hydration}%`}
+                        color="#4ECDC4"
+                        borderWidth={0}
+                        thickness={8}
+                      />
                     </View>
-                    <Text style={styles.optionDescription}>{type.description}</Text>
-                    <View style={styles.featuresList}>
-                      {type.features.map((feature, index) => (
-                        <View key={index} style={styles.featureItem}>
-                          <Ionicons name="checkmark-circle" size={12} color="#10b981" />
-                          <Text style={styles.featureText}>{feature}</Text>
-                        </View>
-                      ))}
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Öligkeit</Text>
+                      <Progress.Circle
+                        size={80}
+                        progress={skinResult.oiliness / 100}
+                        showsText={true}
+                        formatText={() => `${skinResult.oiliness}%`}
+                        color="#FFE66D"
+                        borderWidth={0}
+                        thickness={8}
+                      />
                     </View>
-                    
-                    {type.premium && !type.premium.includes(premiumTier) && (
-                      <View style={styles.premiumOverlay}>
-                        <Ionicons name="lock-closed" size={32} color="#6b7280" />
-                        <Text style={styles.premiumOverlayText}>
-                          Ab {type.premium[0] === 'silver' ? 'Silber' : 'Gold'}
-                        </Text>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Sensitivität</Text>
+                      <Progress.Circle
+                        size={80}
+                        progress={skinResult.sensitivity / 100}
+                        showsText={true}
+                        formatText={() => `${skinResult.sensitivity}%`}
+                        color="#FF6B6B"
+                        borderWidth={0}
+                        thickness={8}
+                      />
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Schädigung</Text>
+                      <Progress.Circle
+                        size={80}
+                        progress={hairResult.damage / 100}
+                        showsText={true}
+                        formatText={() => `${hairResult.damage}%`}
+                        color="#FF6B6B"
+                        borderWidth={0}
+                        thickness={8}
+                      />
+                    </View>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Porosität</Text>
+                      <View style={styles.textMetric}>
+                        <Text style={styles.textMetricValue}>{hairResult.porosity}</Text>
                       </View>
-                    )}
-                  </TouchableOpacity>
+                    </View>
+                    <View style={styles.metricItem}>
+                      <Text style={styles.metricLabel}>Kopfhaut</Text>
+                      <View style={styles.textMetric}>
+                        <Text style={styles.textMetricValue}>{hairResult.scalp}</Text>
+                      </View>
+                    </View>
+                  </>
+                )}
+              </View>
+            </View>
+
+            {/* Probleme */}
+            <View style={styles.resultSection}>
+              <Text style={styles.resultSectionTitle}>Erkannte Probleme</Text>
+              <View style={styles.concernsContainer}>
+                {(isSkinResult ? skinResult.concerns : hairResult.concerns).map((concern, index) => (
+                  <View key={index} style={styles.concernChip}>
+                    <Text style={styles.concernText}>{concern}</Text>
+                  </View>
                 ))}
               </View>
             </View>
 
-            {analysisType && (
-              <View style={styles.stepSection}>
-                <Text style={styles.stepTitle}>Wie möchtest du das Bild aufnehmen?</Text>
-                
-                <View style={styles.inputMethodsGrid}>
-                  {inputMethods.map(method => (
-                    <TouchableOpacity
-                      key={method.id}
-                      style={[
-                        styles.inputMethodCard,
-                        inputMethod === method.id && styles.inputMethodCardSelected
-                      ]}
-                      onPress={() => setInputMethod(method.id)}
-                    >
-                      <View style={styles.inputMethodIcon}>
-                        <Ionicons name={method.icon} size={32} color="#6b46c1" />
+            {/* Empfehlungen */}
+            <View style={styles.resultSection}>
+              <Text style={styles.resultSectionTitle}>Ihre persönliche Routine</Text>
+              
+              {isSkinResult ? (
+                <>
+                  <View style={styles.routineSection}>
+                    <View style={styles.routineHeader}>
+                      <Ionicons name="sunny" size={24} color="#FFB923" />
+                      <Text style={styles.routineTitle}>Morgenroutine</Text>
+                    </View>
+                    {skinResult.recommendations.morning.map((step, index) => (
+                      <View key={index} style={styles.routineStep}>
+                        <Text style={styles.stepNumber}>{index + 1}.</Text>
+                        <Text style={styles.stepText}>{step}</Text>
                       </View>
-                      <Text style={styles.inputMethodTitle}>{method.title}</Text>
-                      <Text style={styles.inputMethodDescription}>{method.description}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            )}
+                    ))}
+                  </View>
 
-            {analysisType && inputMethod && (
-              <View style={styles.stepSection}>
+                  <View style={styles.routineSection}>
+                    <View style={styles.routineHeader}>
+                      <Ionicons name="moon" size={24} color="#6C5CE7" />
+                      <Text style={styles.routineTitle}>Abendroutine</Text>
+                    </View>
+                    {skinResult.recommendations.evening.map((step, index) => (
+                      <View key={index} style={styles.routineStep}>
+                        <Text style={styles.stepNumber}>{index + 1}.</Text>
+                        <Text style={styles.stepText}>{step}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.routineSection}>
+                    <View style={styles.routineHeader}>
+                      <Ionicons name="basket" size={24} color="#4ECDC4" />
+                      <Text style={styles.routineTitle}>Empfohlene Produkte</Text>
+                    </View>
+                    {hairResult.recommendations.products.map((product, index) => (
+                      <View key={index} style={styles.routineStep}>
+                        <Text style={styles.stepNumber}>•</Text>
+                        <Text style={styles.stepText}>{product}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={styles.routineSection}>
+                    <View style={styles.routineHeader}>
+                      <Ionicons name="medical" size={24} color="#FF6B6B" />
+                      <Text style={styles.routineTitle}>Treatments</Text>
+                    </View>
+                    {hairResult.recommendations.treatments.map((treatment, index) => (
+                      <View key={index} style={styles.routineStep}>
+                        <Text style={styles.stepNumber}>•</Text>
+                        <Text style={styles.stepText}>{treatment}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              )}
+            </View>
+
+            {/* Konfidenz */}
+            <View style={styles.confidenceSection}>
+              <Text style={styles.confidenceText}>
+                Analyse-Konfidenz: {results.confidence}%
+              </Text>
+            </View>
+          </ScrollView>
+          
+          <View style={styles.modalFooter}>
+            <TouchableOpacity 
+              style={styles.saveButton} 
+              onPress={() => {
+                Alert.alert('Gespeichert!', 'Die Analyse wurde gespeichert.');
+                setShowResults(false);
+              }}
+            >
+              <LinearGradient
+                colors={['#6b46c1', '#8b5cf6']}
+                style={styles.saveButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              >
+                <Text style={styles.saveButtonText}>Analyse speichern</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#6b46c1"
+          />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Beauty-Analyse</Text>
+          <Text style={styles.headerSubtitle}>
+            Entdecken Sie Ihre perfekte Pflegeroutine mit KI
+          </Text>
+        </View>
+
+        <View style={styles.analysisOptions}>
+          <AnalysisTypeCard
+            title="Hautanalyse"
+            icon="scan"
+            gradient={['#4ECDC4', '#44A08D']}
+            description="Hauttyp, Zustand & personalisierte Pflege"
+            onPress={() => handleAnalysisSelect('skin')}
+          />
+          
+          <AnalysisTypeCard
+            title="Haaranalyse"
+            icon="cut"
+            gradient={['#FFB923', '#FF6B6B']}
+            description="Haartyp, Struktur & optimale Pflege"
+            onPress={() => handleAnalysisSelect('hair')}
+          />
+        </View>
+
+        {/* Analyse Historie */}
+        {analysisHistory.length > 0 && (
+          <View style={styles.historySection}>
+            <Text style={styles.historyTitle}>Letzte Analysen</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.historyScroll}
+            >
+              {analysisHistory.map((item) => (
                 <TouchableOpacity
-                  style={styles.startButton}
-                  onPress={handleAnalysisStart}
+                  key={item.id}
+                  style={styles.historyCard}
+                  onPress={() => {
+                    setResults(item.result);
+                    setSelectedType(item.type);
+                    setShowResults(true);
+                  }}
                 >
-                  <Text style={styles.startButtonText}>Analyse starten</Text>
+                  <Ionicons
+                    name={item.type === 'skin' ? 'scan' : 'cut'}
+                    size={24}
+                    color="#6b46c1"
+                  />
+                  <Text style={styles.historyCardTitle}>
+                    {item.type === 'skin' ? 'Haut' : 'Haar'}
+                  </Text>
+                  <Text style={styles.historyCardDate}>
+                    {item.date.toLocaleDateString('de-DE')}
+                  </Text>
                 </TouchableOpacity>
-              </View>
-            )}
+              ))}
+            </ScrollView>
           </View>
         )}
 
-        {step === 'results' && results && (
-          <View style={styles.analysisCard}>
-            <View style={styles.resultsHeader}>
-              <Text style={styles.resultsTitle}>Analyse abgeschlossen ✨</Text>
-              <Text style={styles.resultsSubtitle}>Hier sind deine personalisierten Ergebnisse</Text>
-            </View>
-
-            {results.skinAnalysis && (
-              <View style={styles.resultSection}>
-                <View style={styles.resultHeader}>
-                  <Text style={styles.resultSectionTitle}>✨ Hautanalyse</Text>
-                  <View style={styles.scoreContainer}>
-                    <Text style={[styles.scoreText, { color: getScoreColor(results.skinAnalysis.score) }]}>
-                      {results.skinAnalysis.score}
-                    </Text>
-                    <Text style={styles.scoreMax}>/100</Text>
-                    <Ionicons name="star" size={20} color="#fbbf24" />
-                  </View>
-                </View>
-
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Hauttyp</Text>
-                    <Text style={styles.metricValue}>{results.skinAnalysis.skinType}</Text>
-                  </View>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Feuchtigkeit</Text>
-                    <Text style={styles.metricValue}>{results.skinAnalysis.hydration}/5</Text>
-                  </View>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Elastizität</Text>
-                    <Text style={styles.metricValue}>{results.skinAnalysis.elasticity}/5</Text>
-                  </View>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Ebenmäßigkeit</Text>
-                    <Text style={styles.metricValue}>{results.skinAnalysis.evenness}/5</Text>
-                  </View>
-                </View>
-
-                <View style={styles.recommendationsCard}>
-                  <Text style={styles.recommendationsTitle}>✨ Hautpflege-Empfehlungen</Text>
-                  {results.skinAnalysis.recommendations.map((rec, index) => (
-                    <View key={index} style={styles.recommendationItem}>
-                      <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-                      <Text style={styles.recommendationText}>{rec}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            {results.hairAnalysis && (
-              <View style={styles.resultSection}>
-                <View style={styles.resultHeader}>
-                  <Text style={styles.resultSectionTitle}>💇‍♀️ Haaranalyse</Text>
-                  <View style={styles.scoreContainer}>
-                    <Text style={[styles.scoreText, { color: getScoreColor(results.hairAnalysis.healthScore) }]}>
-                      {results.hairAnalysis.healthScore}
-                    </Text>
-                    <Text style={styles.scoreMax}>/100</Text>
-                    <Ionicons name="star" size={20} color="#fbbf24" />
-                  </View>
-                </View>
-
-                <View style={styles.metricsGrid}>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Haartyp</Text>
-                    <Text style={styles.metricValue}>{results.hairAnalysis.hairType}</Text>
-                  </View>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Dichte</Text>
-                    <Text style={styles.metricValue}>{results.hairAnalysis.hairDensity}</Text>
-                  </View>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Glanz</Text>
-                    <Text style={styles.metricValue}>{results.hairAnalysis.shineLevel}/5</Text>
-                  </View>
-                  <View style={styles.metricCard}>
-                    <Text style={styles.metricLabel}>Gesundheit</Text>
-                    <Text style={styles.metricValue}>{Math.round(results.hairAnalysis.healthScore/20)}/5</Text>
-                  </View>
-                </View>
-
-                <View style={styles.recommendationsCard}>
-                  <Text style={styles.recommendationsTitle}>🌿 Haarpflege-Empfehlungen</Text>
-                  {results.hairAnalysis.recommendations.map((rec, index) => (
-                    <View key={index} style={styles.recommendationItem}>
-                      <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-                      <Text style={styles.recommendationText}>{rec}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={resetAnalysis}>
-                <Text style={styles.secondaryButtonText}>Neue Analyse</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryButton} onPress={saveAnalysis}>
-                <Ionicons name="archive" size={20} color="white" />
-                <Text style={styles.primaryButtonText}>Analyse speichern</Text>
-              </TouchableOpacity>
+        {/* Info Cards */}
+        <View style={styles.infoSection}>
+          <View style={styles.infoCard}>
+            <Ionicons name="shield-checkmark" size={24} color="#4CAF50" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>Datenschutz garantiert</Text>
+              <Text style={styles.infoText}>
+                Ihre Fotos werden nur für die Analyse verwendet
+              </Text>
             </View>
           </View>
-        )}
+          
+          <View style={styles.infoCard}>
+            <Ionicons name="sparkles" size={24} color="#FFB923" />
+            <View style={styles.infoContent}>
+              <Text style={styles.infoTitle}>KI-gestützte Präzision</Text>
+              <Text style={styles.infoText}>
+                Powered by OpenAI GPT-4 Vision
+              </Text>
+            </View>
+          </View>
+
+          {premiumTier === 'basic' && (
+            <TouchableOpacity style={[styles.infoCard, styles.premiumCard]}>
+              <Ionicons name="star" size={24} color="#6b46c1" />
+              <View style={styles.infoContent}>
+                <Text style={styles.infoTitle}>Upgrade auf Premium</Text>
+                <Text style={styles.infoText}>
+                  Unbegrenzte Analysen & exklusive Features
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#6b46c1" />
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
+
+      {renderAnalyzingModal()}
+      {renderResultsModal()}
     </View>
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  scrollView: {
+    flex: 1,
+  },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+    paddingHorizontal: 20,
     paddingTop: 60,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    paddingBottom: 30,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#1a1a1a',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: '#666',
   },
-  analysisLimitBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fef3c7',
-    padding: 12,
-    borderRadius: 12,
-    marginTop: 12,
-    gap: 8,
-  },
-  analysisLimitText: {
-    fontSize: 14,
-    color: '#92400e',
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
+  analysisOptions: {
+    paddingHorizontal: 20,
+    marginBottom: 30,
   },
   analysisCard: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 32,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    marginBottom: 16,
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  stepSection: {
-    marginBottom: 32,
+  cardGradient: {
+    padding: 30,
   },
-  stepTitle: {
+  cardContent: {
+    alignItems: 'center',
+  },
+  cardTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  cardDescription: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.9)',
+    textAlign: 'center',
+  },
+  historySection: {
+    marginBottom: 30,
+  },
+  historyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  optionsGrid: {
-    gap: 16,
-  },
-  optionCard: {
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
-    borderRadius: 16,
-    padding: 24,
-    position: 'relative',
-  },
-  optionCardSelected: {
-    borderColor: '#6b46c1',
-    backgroundColor: '#faf5ff',
-  },
-  optionCardDisabled: {
-    opacity: 0.6,
-  },
-  optionIcon: {
-    fontSize: 48,
-    textAlign: 'center',
+    color: '#1a1a1a',
     marginBottom: 16,
+    paddingHorizontal: 20,
   },
-  optionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+  historyScroll: {
+    paddingHorizontal: 20,
   },
-  optionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  optionDescription: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  featuresList: {
-    gap: 4,
-  },
-  featureItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  featureText: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  premiumOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(243, 244, 246, 0.8)',
+  historyCard: {
+    backgroundColor: '#fff',
+    padding: 20,
     borderRadius: 16,
-    justifyContent: 'center',
+    marginRight: 12,
     alignItems: 'center',
+    minWidth: 100,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
-  premiumOverlayText: {
+  historyCardTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#1a1a1a',
     marginTop: 8,
   },
-  inputMethodsGrid: {
-    flexDirection: 'row',
-    gap: 16,
+  historyCardDate: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
   },
-  inputMethodCard: {
-    flex: 1,
-    borderWidth: 2,
-    borderColor: '#e5e7eb',
+  infoSection: {
+    paddingHorizontal: 20,
+    marginBottom: 30,
+  },
+  infoCard: {
+    backgroundColor: '#fff',
+    padding: 20,
     borderRadius: 16,
-    padding: 24,
+    marginBottom: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
-  inputMethodCardSelected: {
+  infoContent: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  infoText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+  },
+  premiumCard: {
+    borderWidth: 1,
     borderColor: '#6b46c1',
     backgroundColor: '#faf5ff',
   },
-  inputMethodIcon: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  inputMethodTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  inputMethodDescription: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  startButton: {
-    backgroundColor: '#6b46c1',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  startButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  loadingContainer: {
+  analyzingOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  analyzingContainer: {
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  analyzingContent: {
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    padding: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+  },
+  analyzingTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1a1a1a',
+    marginBottom: 20,
+  },
+  progressContainer: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  progressText: {
+    fontSize: 16,
+    color: '#6b46c1',
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  analyzingSubtext: {
+    fontSize: 14,
+    color: '#666',
+  },
+  modalContainer: {
+    flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  loadingTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginTop: 24,
-    marginBottom: 8,
-  },
-  loadingSubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  resultsHeader: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  resultsTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 8,
-  },
-  resultsSubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  resultSection: {
-    marginBottom: 32,
-  },
-  resultHeader: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
-  resultSectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  scoreContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  scoreText: {
+  modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#1a1a1a',
   },
-  scoreMax: {
-    fontSize: 16,
-    color: '#6b7280',
+  closeButton: {
+    padding: 8,
   },
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 24,
+  resultsContent: {
+    flex: 1,
   },
-  metricCard: {
-    backgroundColor: '#f3f4f6',
+  resultSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 20,
     borderRadius: 16,
-    padding: 16,
-    width: '47%',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  resultSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 16,
+  },
+  resultBox: {
+    alignItems: 'center',
+  },
+  resultMainText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#6b46c1',
+    marginBottom: 8,
+  },
+  resultSubText: {
+    fontSize: 16,
+    color: '#666',
+  },
+  metricsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+  },
+  metricItem: {
     alignItems: 'center',
   },
   metricLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  metricValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  recommendationsCard: {
-    backgroundColor: '#faf5ff',
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  recommendationsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 16,
-  },
-  recommendationItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 12,
-  },
-  recommendationText: {
     fontSize: 14,
-    color: '#374151',
-    flex: 1,
+    color: '#666',
+    marginBottom: 8,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: 16,
+  textMetric: {
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginTop: 8,
   },
-  secondaryButton: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: '#374151',
-    fontSize: 16,
+  textMetricValue: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#1976D2',
   },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: '#10b981',
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
+  concernsContainer: {
     flexDirection: 'row',
-    justifyContent: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
-  primaryButtonText: {
-    color: 'white',
+  concernChip: {
+    backgroundColor: '#FFE5E5',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  concernText: {
+    fontSize: 14,
+    color: '#D32F2F',
+  },
+  routineSection: {
+    marginBottom: 20,
+  },
+  routineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  routineTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginLeft: 8,
+  },
+  routineStep: {
+    flexDirection: 'row',
+    marginBottom: 8,
+    paddingLeft: 32,
+  },
+  stepNumber: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b46c1',
+    marginRight: 12,
+    width: 20,
+  },
+  stepText: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+    lineHeight: 20,
+  },
+  confidenceSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  confidenceText: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
+  },
+  modalFooter: {
+    padding: 20,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+  },
+  saveButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  saveButtonGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
+
+// Export für Navigation
+export default AnalysisScreen;

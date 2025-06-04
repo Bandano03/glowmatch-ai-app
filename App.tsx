@@ -5,17 +5,14 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-// TEMPORÄR: Test Camera Screen
-import TestCameraScreen from './src/screens/TestCameraScreen';
-
-// Import all screens - AUSKOMMENTIERT FÜR TEST
-// import { HomeScreen } from './src/screens/HomeScreen';
-// import { AnalysisScreen } from './src/screens/AnalysisScreen';
-// import { HistoryScreen } from './src/screens/HistoryScreen';
-// import { ProductsScreen } from './src/screens/ProductsScreen';
-// import { ProfileScreen } from './src/screens/ProfileScreen';
-// import { RecipesScreen } from './src/screens/RecipesScreen';
-// import { AuthScreen } from './src/screens/AuthScreen';
+// Import all screens
+import { HomeScreen } from './src/screens/HomeScreen';
+import { AnalysisScreen } from './src/screens/AnalysisScreen';
+import { HistoryScreen } from './src/screens/HistoryScreen';
+import { ProductsScreen } from './src/screens/ProductsScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
+import { RecipesScreen } from './src/screens/RecipesScreen';
+import { AuthScreen } from './src/screens/AuthScreen';
 
 // Import types
 import { PremiumTier } from './src/types/premium';
@@ -37,14 +34,6 @@ export const UserContext = React.createContext({
 });
 
 export default function App() {
-  // TEMPORÄR: Direkt TestCameraScreen zurückgeben
-  return (
-    <SafeAreaProvider>
-      <TestCameraScreen />
-    </SafeAreaProvider>
-  );
-
-  /* AUSKOMMENTIERT FÜR TEST - ORIGINAL CODE UNTEN
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -176,7 +165,6 @@ export default function App() {
       </SafeAreaProvider>
     </UserContext.Provider>
   );
-  */
 }
 
 const styles = StyleSheet.create({
