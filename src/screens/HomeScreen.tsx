@@ -1,316 +1,756 @@
-import React, { useState, useContext } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  StatusBar,
-  Modal 
+import React, { useContext, useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  Dimensions,
+  RefreshControl,
+  Animated,
+  ActivityIndicator,
+  Platform,
+  Modal,
+  FlatList,
+  Alert,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { UserContext } from '../../App';
-import { PREMIUM_TIERS } from '../types/premium';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export function HomeScreen({ navigation }) {
-  const { user, premiumTier, nextPackageDate } = useContext(UserContext);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showSavedAnalyses, setShowSavedAnalyses] = useState(false);
+const { width, height } = Dimensions.get('window');
 
-  const dailyTip = {
-    icon: '💧',
-    category: 'Hydration',
-    text: 'Trinke heute mindestens 2 Liter Wasser für strahlende Haut',
-    type: 'skincare'
+// Interfaces
+interface DailyTip {
+  id: string;
+  category: 'skin' | 'hair' | 'wellness' | 'nutrition';
+  title: string;
+  content: string;
+  icon: string;
+}
+
+interface WeatherData {
+  temp: number;
+  humidity: number;
+  uv: number;
+  condition: string;
+}
+
+interface RoutineTask {
+  id: string;
+  title: string;
+  completed: boolean;
+  time: 'morning' | 'evening';
+  icon: string;
+}
+
+interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  progress: number;
+  total: number;
+  unlocked: boolean;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  brand: string;
+  image: string;
+  rating: number;
+}
+
+export function HomeScreen() {
+  const navigation = useNavigation();
+  const { user, premiumTier } = useContext(UserContext);
+  
+  // States
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [currentTip, setCurrentTip] = useState<DailyTip | null>(null);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [routineTasks, setRoutineTasks] = useState<RoutineTask[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  const [recommendedProducts, setRecommendedProducts] = useState<Product[]>([]);
+  const [showRoutineModal, setShowRoutineModal] = useState(false);
+  const [showAchievementModal, setShowAchievementModal] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState<Achievement | null>(null);
+  const [stats, setStats] = useState({
+    analysisCount: 12,
+    savedProducts: 24,
+    recipesTried: 8,
+    streakDays: 5,
+    skinScore: 85,
+    hairScore: 78,
+  });
+
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    loadAllData();
+    startAnimations();
+  }, []);
+
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Continuous rotation for loading states
+    Animated.loop(
+      Animated.timing(rotateAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    ).start();
   };
 
-  const notifications = [
-    {
-      id: '1',
-      title: 'Hautveränderung erkannt',
-      message: 'Deine Haut ist feuchter geworden! Deine Pflegeroutine zeigt Wirkung. 🌟',
-      timestamp: new Date().toISOString(),
-      severity: 'medium'
+  const loadAllData = async () => {
+    setLoading(true);
+    try {
+      // Parallel loading für bessere Performance
+      await Promise.all([
+        loadDailyTip(),
+        loadWeather(),
+        loadRoutineTasks(),
+        loadAchievements(),
+        loadRecommendedProducts(),
+        loadUserStats(),
+      ]);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const savedAnalyses = [
-    {
-      id: '1',
-      title: 'Hautanalyse - 02.06.2025',
-      skinAnalysis: { skinType: 'Normal', score: 78 },
-      savedAt: new Date().toISOString()
+  const loadDailyTip = async () => {
+    const tips: DailyTip[] = [
+      {
+        id: '1',
+        category: 'skin',
+        title: 'Sonnenschutz ist essentiell',
+        content: 'Tragen Sie täglich LSF 30+ auf, auch bei bewölktem Himmel. 80% der UV-Strahlen durchdringen Wolken!',
+        icon: 'sunny',
+      },
+      {
+        id: '2',
+        category: 'hair',
+        title: 'Seidenkissenbezug verwenden',
+        content: 'Seide reduziert Haarbruch und Frizz während Sie schlafen. Ihre Haare werden es Ihnen danken!',
+        icon: 'moon',
+      },
+      {
+        id: '3',
+        category: 'wellness',
+        title: 'Hydration von innen',
+        content: 'Trinken Sie mindestens 2L Wasser täglich für strahlende Haut und gesundes Haar.',
+        icon: 'water',
+      },
+    ];
+    
+    const randomTip = tips[Math.floor(Math.random() * tips.length)];
+    setCurrentTip(randomTip);
+  };
+
+  const loadWeather = async () => {
+    // Simulierte Wetterdaten - in echter App würde man eine Weather API nutzen
+    setWeather({
+      temp: 22,
+      humidity: 65,
+      uv: 6,
+      condition: 'Teilweise bewölkt',
+    });
+  };
+
+  const loadRoutineTasks = async () => {
+    const tasks: RoutineTask[] = [
+      { id: '1', title: 'Gesichtsreinigung', completed: true, time: 'morning', icon: 'water' },
+      { id: '2', title: 'Serum auftragen', completed: true, time: 'morning', icon: 'color-fill' },
+      { id: '3', title: 'Sonnenschutz', completed: false, time: 'morning', icon: 'sunny' },
+      { id: '4', title: 'Make-up entfernen', completed: false, time: 'evening', icon: 'sparkles' },
+      { id: '5', title: 'Nachtcreme', completed: false, time: 'evening', icon: 'moon' },
+    ];
+    setRoutineTasks(tasks);
+  };
+
+  const loadAchievements = async () => {
+    const achievementsList: Achievement[] = [
+      {
+        id: '1',
+        title: 'Analyse-Profi',
+        description: '10 Analysen durchgeführt',
+        icon: 'trophy',
+        progress: 8,
+        total: 10,
+        unlocked: false,
+      },
+      {
+        id: '2',
+        title: 'Routine-Meister',
+        description: '7 Tage Streak',
+        icon: 'flame',
+        progress: 5,
+        total: 7,
+        unlocked: false,
+      },
+      {
+        id: '3',
+        title: 'DIY-Experte',
+        description: '5 Rezepte ausprobiert',
+        icon: 'flask',
+        progress: 5,
+        total: 5,
+        unlocked: true,
+      },
+    ];
+    setAchievements(achievementsList);
+  };
+
+  const loadRecommendedProducts = async () => {
+    const products: Product[] = [
+      {
+        id: '1',
+        name: 'Vitamin C Serum',
+        brand: 'The Ordinary',
+        image: 'https://via.placeholder.com/150',
+        rating: 4.5,
+      },
+      {
+        id: '2',
+        name: 'Retinol 0.5%',
+        brand: 'Paula\'s Choice',
+        image: 'https://via.placeholder.com/150',
+        rating: 4.8,
+      },
+      {
+        id: '3',
+        name: 'Hyaluronic Acid',
+        brand: 'CeraVe',
+        image: 'https://via.placeholder.com/150',
+        rating: 4.3,
+      },
+    ];
+    setRecommendedProducts(products);
+  };
+
+  const loadUserStats = async () => {
+    // Hier würden Sie echte Statistiken aus der Datenbank laden
+    const savedStats = await AsyncStorage.getItem('userStats');
+    if (savedStats) {
+      setStats(JSON.parse(savedStats));
     }
-  ];
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await loadAllData();
+    setRefreshing(false);
+  };
+
+  const toggleRoutineTask = async (taskId: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setRoutineTasks(prev => 
+      prev.map(task => 
+        task.id === taskId ? { ...task, completed: !task.completed } : task
+      )
+    );
+    
+    // Update streak wenn alle Tasks erledigt
+    const allCompleted = routineTasks.every(task => task.completed || task.id === taskId);
+    if (allCompleted) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Glückwunsch!', 'Sie haben Ihre heutige Routine abgeschlossen! 🎉');
+    }
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Guten Morgen';
+    if (hour < 18) return 'Guten Tag';
+    return 'Guten Abend';
+  };
+
+  const getWeatherAdvice = () => {
+    if (!weather) return null;
+    
+    if (weather.uv >= 6) {
+      return 'Hoher UV-Index! Vergessen Sie nicht den Sonnenschutz.';
+    } else if (weather.humidity < 40) {
+      return 'Niedrige Luftfeuchtigkeit - Extra Feuchtigkeitspflege empfohlen.';
+    } else if (weather.temp < 10) {
+      return 'Kaltes Wetter - Schützen Sie Ihre Haut vor dem Austrocknen.';
+    }
+    return 'Perfektes Wetter für Ihre Haut!';
+  };
+
+  const renderHeader = () => (
+    <Animated.View style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <LinearGradient
+        colors={['#6b46c1', '#8b5cf6']}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <Text style={styles.greeting}>{getGreeting()},</Text>
+            <Text style={styles.userName}>{user?.name || 'Beauty Lover'}!</Text>
+            {weather && (
+              <View style={styles.weatherContainer}>
+                <Ionicons name="partly-sunny" size={16} color="rgba(255,255,255,0.8)" />
+                <Text style={styles.weatherText}>
+                  {weather.temp}°C • {weather.condition}
+                </Text>
+              </View>
+            )}
+          </View>
+          <TouchableOpacity 
+            onPress={() => navigation.navigate('Profil' as never)}
+            style={styles.avatarContainer}
+          >
+            <Image
+              source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=User&background=fff&color=6b46c1' }}
+              style={styles.avatar}
+            />
+            {premiumTier !== 'basic' && (
+              <View style={styles.premiumBadge}>
+                <Ionicons name="star" size={12} color="#FFD700" />
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {/* Beauty Score */}
+        <View style={styles.beautyScoreContainer}>
+          <View style={styles.scoreBox}>
+            <Text style={styles.scoreLabel}>Skin Score</Text>
+            <View style={styles.scoreCircle}>
+              <Text style={styles.scoreValue}>{stats.skinScore}</Text>
+            </View>
+          </View>
+          <View style={styles.scoreBox}>
+            <Text style={styles.scoreLabel}>Hair Score</Text>
+            <View style={styles.scoreCircle}>
+              <Text style={styles.scoreValue}>{stats.hairScore}</Text>
+            </View>
+          </View>
+          <View style={styles.scoreBox}>
+            <Text style={styles.scoreLabel}>Streak</Text>
+            <View style={styles.scoreCircle}>
+              <Text style={styles.scoreValue}>{stats.streakDays}</Text>
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+    </Animated.View>
+  );
+
+  const renderDailyRoutine = () => (
+    <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Tägliche Routine</Text>
+        <TouchableOpacity onPress={() => setShowRoutineModal(true)}>
+          <Text style={styles.sectionAction}>Alle anzeigen</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <View style={styles.routineContainer}>
+        {routineTasks.slice(0, 3).map((task) => (
+          <TouchableOpacity
+            key={task.id}
+            style={[styles.routineTask, task.completed && styles.routineTaskCompleted]}
+            onPress={() => toggleRoutineTask(task.id)}
+          >
+            <View style={[styles.routineCheckbox, task.completed && styles.routineCheckboxCompleted]}>
+              {task.completed && <Ionicons name="checkmark" size={16} color="#fff" />}
+            </View>
+            <Text style={[styles.routineTaskText, task.completed && styles.routineTaskTextCompleted]}>
+              {task.title}
+            </Text>
+            <Ionicons name={task.icon as any} size={20} color={task.completed ? '#4CAF50' : '#999'} />
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={styles.progressContainer}>
+        <View style={styles.progressBar}>
+          <View 
+            style={[
+              styles.progressFill, 
+              { width: `${(routineTasks.filter(t => t.completed).length / routineTasks.length) * 100}%` }
+            ]} 
+          />
+        </View>
+        <Text style={styles.progressText}>
+          {routineTasks.filter(t => t.completed).length} von {routineTasks.length} erledigt
+        </Text>
+      </View>
+    </Animated.View>
+  );
+
+  const renderQuickActions = () => {
+    const actions = [
+      {
+        id: 'skin-analysis',
+        title: 'Hautanalyse',
+        subtitle: 'KI-gestützt',
+        icon: 'scan',
+        color: ['#4ECDC4', '#44A08D'],
+        onPress: () => navigation.navigate('Analyse' as never),
+      },
+      {
+        id: 'hair-analysis',
+        title: 'Haaranalyse',
+        subtitle: 'Personalisiert',
+        icon: 'cut',
+        color: ['#FFB923', '#FF6B6B'],
+        onPress: () => navigation.navigate('Analyse' as never),
+      },
+      {
+        id: 'recipes',
+        title: 'DIY Rezepte',
+        subtitle: `${premiumTier === 'basic' ? '3 kostenlos' : 'Alle freigeschaltet'}`,
+        icon: 'flask',
+        color: ['#A8E6CF', '#7FD8BE'],
+        onPress: () => navigation.navigate('Rezepte' as never),
+      },
+      {
+        id: 'products',
+        title: 'Produkte',
+        subtitle: 'Empfehlungen',
+        icon: 'basket',
+        color: ['#C7CEEA', '#B2B7E1'],
+        onPress: () => navigation.navigate('Produkte' as never),
+      },
+    ];
+
+    return (
+      <Animated.View style={[styles.section, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <View style={styles.quickActionsGrid}>
+          {actions.map((action) => (
+            <TouchableOpacity
+              key={action.id}
+              style={styles.quickActionCard}
+              onPress={async () => {
+                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                action.onPress();
+              }}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={action.color}
+                style={styles.quickActionGradient}
+              >
+                <Ionicons name={action.icon as any} size={32} color="#fff" />
+                <Text style={styles.quickActionTitle}>{action.title}</Text>
+                <Text style={styles.quickActionSubtitle}>{action.subtitle}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const renderDailyTip = () => {
+    if (!currentTip) return null;
+
+    return (
+      <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+        <View style={styles.tipCard}>
+          <LinearGradient
+            colors={['#FFF9E6', '#FFE4B5']}
+            style={styles.tipGradient}
+          >
+            <View style={styles.tipHeader}>
+              <Ionicons name={currentTip.icon as any} size={24} color="#FF8C00" />
+              <Text style={styles.tipTitle}>Tipp des Tages</Text>
+              <View style={styles.tipBadge}>
+                <Text style={styles.tipBadgeText}>{currentTip.category.toUpperCase()}</Text>
+              </View>
+            </View>
+            <Text style={styles.tipSubtitle}>{currentTip.title}</Text>
+            <Text style={styles.tipContent}>{currentTip.content}</Text>
+            {weather && getWeatherAdvice() && (
+              <View style={styles.weatherAdvice}>
+                <Ionicons name="information-circle" size={16} color="#FF6347" />
+                <Text style={styles.weatherAdviceText}>{getWeatherAdvice()}</Text>
+              </View>
+            )}
+          </LinearGradient>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const renderAchievements = () => (
+    <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Achievements</Text>
+        <TouchableOpacity onPress={() => setShowAchievementModal(true)}>
+          <Text style={styles.sectionAction}>Alle ({achievements.length})</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {achievements.map((achievement) => (
+          <TouchableOpacity
+            key={achievement.id}
+            style={[styles.achievementCard, achievement.unlocked && styles.achievementCardUnlocked]}
+            onPress={() => {
+              setSelectedAchievement(achievement);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
+          >
+            <View style={[styles.achievementIcon, achievement.unlocked && styles.achievementIconUnlocked]}>
+              <Ionicons 
+                name={achievement.icon as any} 
+                size={32} 
+                color={achievement.unlocked ? '#FFD700' : '#ccc'} 
+              />
+            </View>
+            <Text style={styles.achievementTitle}>{achievement.title}</Text>
+            <View style={styles.achievementProgress}>
+              <View style={styles.achievementProgressBar}>
+                <View 
+                  style={[
+                    styles.achievementProgressFill,
+                    { width: `${(achievement.progress / achievement.total) * 100}%` }
+                  ]}
+                />
+              </View>
+              <Text style={styles.achievementProgressText}>
+                {achievement.progress}/{achievement.total}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </Animated.View>
+  );
+
+  const renderRecommendedProducts = () => (
+    <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Für Sie empfohlen</Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Produkte' as never)}>
+          <Text style={styles.sectionAction}>Mehr</Text>
+        </TouchableOpacity>
+      </View>
+      
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        {recommendedProducts.map((product) => (
+          <TouchableOpacity
+            key={product.id}
+            style={styles.productCard}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              navigation.navigate('Produkte' as never);
+            }}
+          >
+            <Image source={{ uri: product.image }} style={styles.productImage} />
+            <View style={styles.productInfo}>
+              <Text style={styles.productBrand}>{product.brand}</Text>
+              <Text style={styles.productName} numberOfLines={2}>{product.name}</Text>
+              <View style={styles.productRating}>
+                {[...Array(5)].map((_, i) => (
+                  <Ionicons 
+                    key={i} 
+                    name="star" 
+                    size={12} 
+                    color={i < Math.floor(product.rating) ? '#FFD700' : '#e0e0e0'} 
+                  />
+                ))}
+                <Text style={styles.productRatingText}>{product.rating}</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </Animated.View>
+  );
+
+  const renderPremiumBanner = () => {
+    if (premiumTier !== 'basic') return null;
+
+    return (
+      <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
+        <TouchableOpacity 
+          style={styles.premiumBanner}
+          onPress={() => navigation.navigate('Profil' as never)}
+          activeOpacity={0.9}
+        >
+          <LinearGradient
+            colors={['#FFD700', '#FFA500']}
+            style={styles.premiumGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.premiumContent}>
+              <View style={styles.premiumLeft}>
+                <Ionicons name="star" size={32} color="#fff" />
+              </View>
+              <View style={styles.premiumCenter}>
+                <Text style={styles.premiumTitle}>Upgrade auf Premium</Text>
+                <Text style={styles.premiumSubtitle}>
+                  Unbegrenzte Analysen, exklusive Rezepte & mehr!
+                </Text>
+                <View style={styles.premiumFeatures}>
+                  <View style={styles.premiumFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                    <Text style={styles.premiumFeatureText}>Unbegrenzte Analysen</Text>
+                  </View>
+                  <View style={styles.premiumFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                    <Text style={styles.premiumFeatureText}>50+ Premium Rezepte</Text>
+                  </View>
+                  <View style={styles.premiumFeature}>
+                    <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                    <Text style={styles.premiumFeatureText}>Persönliche Beratung</Text>
+                  </View>
+                </View>
+              </View>
+              <Ionicons name="arrow-forward" size={24} color="#fff" />
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
+  // Modals
+  const renderRoutineModal = () => (
+    <Modal
+      visible={showRoutineModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowRoutineModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Tägliche Routine</Text>
+          <TouchableOpacity onPress={() => setShowRoutineModal(false)}>
+            <Ionicons name="close" size={28} color="#333" />
+          </TouchableOpacity>
+        </View>
+        
+        <ScrollView style={styles.modalContent}>
+          <View style={styles.routineSection}>
+            <Text style={styles.routineSectionTitle}>
+              <Ionicons name="sunny" size={20} color="#FFB923" /> Morgenroutine
+            </Text>
+            {routineTasks.filter(t => t.time === 'morning').map((task) => (
+              <TouchableOpacity
+                key={task.id}
+                style={[styles.routineModalTask, task.completed && styles.routineModalTaskCompleted]}
+                onPress={() => toggleRoutineTask(task.id)}
+              >
+                <View style={[styles.routineCheckbox, task.completed && styles.routineCheckboxCompleted]}>
+                  {task.completed && <Ionicons name="checkmark" size={16} color="#fff" />}
+                </View>
+                <Text style={[styles.routineModalTaskText, task.completed && styles.routineModalTaskTextCompleted]}>
+                  {task.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          <View style={styles.routineSection}>
+            <Text style={styles.routineSectionTitle}>
+              <Ionicons name="moon" size={20} color="#6C5CE7" /> Abendroutine
+            </Text>
+            {routineTasks.filter(t => t.time === 'evening').map((task) => (
+              <TouchableOpacity
+                key={task.id}
+                style={[styles.routineModalTask, task.completed && styles.routineModalTaskCompleted]}
+                onPress={() => toggleRoutineTask(task.id)}
+              >
+                <View style={[styles.routineCheckbox, task.completed && styles.routineCheckboxCompleted]}>
+                  {task.completed && <Ionicons name="checkmark" size={16} color="#fff" />}
+                </View>
+                <Text style={[styles.routineModalTaskText, task.completed && styles.routineModalTaskTextCompleted]}>
+                  {task.title}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Animated.View
+          style={{
+            transform: [{
+              rotate: rotateAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0deg', '360deg'],
+              }),
+            }],
+          }}
+        >
+          <Ionicons name="refresh" size={48} color="#6b46c1" />
+        </Animated.View>
+        <Text style={styles.loadingText}>Lade Ihre Beauty-Daten...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.logo}>
-            <Text style={styles.logoText}>✨</Text>
-          </View>
-          <View>
-            <Text style={styles.appTitle}>GlowMatch AI</Text>
-            <Text style={styles.appSubtitle}>Affiliate Beauty App</Text>
-          </View>
-        </View>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#6b46c1"
+          />
+        }
+      >
+        {renderHeader()}
+        {renderDailyRoutine()}
+        {renderQuickActions()}
+        {renderDailyTip()}
+        {renderAchievements()}
+        {renderRecommendedProducts()}
+        {renderPremiumBanner()}
         
-        <View style={styles.headerRight}>
-          {premiumTier !== 'basic' && (
-            <View style={[styles.premiumBadge, { 
-              backgroundColor: premiumTier === 'gold' ? '#fef3c7' : '#f3f4f6' 
-            }]}>
-              <Ionicons 
-                name={premiumTier === 'gold' ? 'crown' : 'star'} 
-                size={16} 
-                color={premiumTier === 'gold' ? '#f59e0b' : '#6b7280'} 
-              />
-              <Text style={[styles.premiumText, { 
-                color: premiumTier === 'gold' ? '#92400e' : '#374151' 
-              }]}>
-                {PREMIUM_TIERS[premiumTier].name}
-              </Text>
-            </View>
-          )}
-          
-          <View style={styles.userInfo}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
-            </View>
-            <View>
-              <Text style={styles.userName}>{user?.name}</Text>
-              <Text style={styles.userStatus}>{PREMIUM_TIERS[premiumTier].name}</Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Gold Package Countdown */}
-        {premiumTier === 'gold' && nextPackageDate && (
-          <TouchableOpacity 
-            style={styles.goldPackageCountdown}
-            onPress={() => navigation.navigate('Profil')}
-          >
-            <View style={styles.goldPackageCountdownContent}>
-              <View style={styles.goldPackageIcon}>
-                <Ionicons name="gift" size={24} color="#f59e0b" />
-              </View>
-              <View style={styles.goldPackageCountdownText}>
-                <Text style={styles.goldPackageCountdownTitle}>Dein nächstes Selfcare-Paket</Text>
-                <Text style={styles.goldPackageCountdownDate}>
-                  in {Math.ceil((nextPackageDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} Tagen
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#f59e0b" />
-          </TouchableOpacity>
-        )}
-
-        {/* Daily Tip */}
-        {user && dailyTip && (
-          <View style={styles.dailyTipCard}>
-            <View style={styles.dailyTipHeader}>
-              <View style={styles.dailyTipLeft}>
-                <View style={styles.dailyTipIcon}>
-                  <Text style={styles.dailyTipIconText}>✨</Text>
-                </View>
-                <View>
-                  <Text style={styles.dailyTipTitle}>Dein täglicher Beauty-Tipp</Text>
-                  <Text style={styles.dailyTipCategory}>{dailyTip.category} • Kostenlos für alle</Text>
-                </View>
-              </View>
-              <Text style={styles.dailyTipEmoji}>{dailyTip.icon}</Text>
-            </View>
-            <Text style={styles.dailyTipText}>{dailyTip.text}</Text>
-            <View style={styles.dailyTipTag}>
-              <Text style={styles.dailyTipTagText}>✨ Hautpflege</Text>
-            </View>
-          </View>
-        )}
-
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          {notifications.length > 0 && (
-            <TouchableOpacity 
-              style={styles.quickActionCard}
-              onPress={() => setShowNotifications(true)}
-            >
-              <View style={styles.quickActionContent}>
-                <View style={styles.quickActionLeft}>
-                  <Ionicons name="notifications" size={24} color="#3b82f6" />
-                  <View style={styles.quickActionText}>
-                    <Text style={styles.quickActionTitle}>Neue Benachrichtigungen</Text>
-                    <Text style={styles.quickActionSubtitle}>{notifications.length} neue Erkenntnisse</Text>
-                  </View>
-                </View>
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{notifications.length}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity 
-            style={styles.quickActionCard}
-            onPress={() => setShowSavedAnalyses(true)}
-          >
-            <View style={styles.quickActionContent}>
-              <View style={styles.quickActionLeft}>
-                <Ionicons name="archive" size={24} color="#f59e0b" />
-                <View style={styles.quickActionText}>
-                  <Text style={styles.quickActionTitle}>Gespeicherte Analysen</Text>
-                  <Text style={styles.quickActionSubtitle}>{savedAnalyses.length} gespeichert</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#f59e0b" />
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Hero Section */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroContent}>
-            <View style={styles.heroTag}>
-              <Text style={styles.heroTagText}>✨ KI-gestützte Beauty-Analyse</Text>
-            </View>
-            <Text style={styles.heroTitle}>
-              Entdecke deine perfekte{'\n'}
-              <Text style={styles.heroTitleGradient}>Beauty-Routine</Text>
-            </Text>
-            <Text style={styles.heroDescription}>
-              Unsere fortschrittliche KI analysiert deine Haut und Haare für 
-              personalisierte Empfehlungen und optimale Ergebnisse.
-            </Text>
-            
-            <TouchableOpacity 
-              style={styles.heroButton}
-              onPress={() => navigation.navigate('Analyse')}
-            >
-              <Ionicons name="camera" size={24} color="white" />
-              <Text style={styles.heroButtonText}>Jetzt analysieren</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Features Grid */}
-        <View style={styles.featuresGrid}>
-          <View style={styles.featureCard}>
-            <View style={styles.featureIcon}>
-              <Ionicons name="flash" size={20} color="#3b82f6" />
-            </View>
-            <Text style={styles.featureTitle}>Live Beauty-Analyse</Text>
-            <Text style={styles.featureDescription}>
-              Echtzeit-Analyse von Haut und Haaren mit personalisierten Empfehlungen
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <View style={styles.featureIcon}>
-              <Ionicons name="trending-up" size={20} color="#10b981" />
-            </View>
-            <Text style={styles.featureTitle}>Fortschritt verfolgen</Text>
-            <Text style={styles.featureDescription}>
-              Dokumentiere deine Beauty-Verbesserung mit Vorher-Nachher-Vergleichen
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <View style={styles.featureIcon}>
-              <Ionicons name="bag" size={20} color="#ec4899" />
-            </View>
-            <Text style={styles.featureTitle}>Personalisierte Produkte</Text>
-            <Text style={styles.featureDescription}>
-              Entdecke Haut- und Haarprodukte, die perfekt zu deinem Typ passen
-            </Text>
-          </View>
-
-          <View style={styles.featureCard}>
-            <View style={styles.featureIcon}>
-              <Ionicons name="crown" size={20} color="#6b46c1" />
-            </View>
-            <Text style={styles.featureTitle}>Premium Features</Text>
-            <Text style={styles.featureDescription}>
-              Erweiterte Analyse, Routinen und exklusive Beauty-Inhalte
-            </Text>
-          </View>
-        </View>
-
-        {/* Premium CTA */}
-        {premiumTier === 'basic' && (
-          <View style={styles.premiumCard}>
-            <View style={styles.premiumContent}>
-              <View>
-                <Text style={styles.premiumTitle}>Premium freischalten</Text>
-                <Text style={styles.premiumDescription}>
-                  Wähle zwischen Silber (CHF 15/Monat) oder Gold (CHF 25/Monat) mit exklusiven Paketen
-                </Text>
-              </View>
-              <Ionicons name="crown" size={32} color="#fbbf24" />
-            </View>
-            <TouchableOpacity 
-              style={styles.premiumButton}
-              onPress={() => navigation.navigate('Profil')}
-            >
-              <Text style={styles.premiumButtonText}>Pläne ansehen</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={{ height: 100 }} />
       </ScrollView>
-
-      {/* Notifications Modal */}
-      <Modal visible={showNotifications} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Benachrichtigungen</Text>
-            <TouchableOpacity onPress={() => setShowNotifications(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView style={styles.modalContent}>
-            {notifications.map(notification => (
-              <View key={notification.id} style={styles.notificationItem}>
-                <Text style={styles.notificationTitle}>{notification.title}</Text>
-                <Text style={styles.notificationMessage}>{notification.message}</Text>
-                <Text style={styles.notificationTime}>
-                  {new Date(notification.timestamp).toLocaleString('de-DE')}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </Modal>
-
-      {/* Saved Analyses Modal */}
-      <Modal visible={showSavedAnalyses} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Gespeicherte Analysen</Text>
-            <TouchableOpacity onPress={() => setShowSavedAnalyses(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
-          
-          <ScrollView style={styles.modalContent}>
-            {savedAnalyses.map(analysis => (
-              <View key={analysis.id} style={styles.analysisItem}>
-                <Text style={styles.analysisTitle}>{analysis.title}</Text>
-                <Text style={styles.analysisDetails}>
-                  {analysis.skinAnalysis?.skinType} • Score: {analysis.skinAnalysis?.score}/100
-                </Text>
-                <Text style={styles.analysisTime}>
-                  {new Date(analysis.savedAt).toLocaleString('de-DE')}
-                </Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-      </Modal>
+      
+      {renderRoutineModal()}
     </View>
   );
 }
@@ -320,426 +760,477 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  scrollView: {
+    flex: 1,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 16,
+    color: '#6b46c1',
+  },
   header: {
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    paddingTop: 50,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    alignItems: 'flex-start',
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flex: 1,
   },
-  logo: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#6b46c1',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  logoText: {
-    fontSize: 24,
-    color: 'white',
-  },
-  appTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  appSubtitle: {
-    fontSize: 12,
-    color: '#6b46c1',
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  premiumBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    gap: 4,
-  },
-  premiumText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  userInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#ec4899',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: 'white',
-    fontWeight: 'bold',
+  greeting: {
     fontSize: 16,
+    color: 'rgba(255,255,255,0.8)',
   },
   userName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  userStatus: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  goldPackageCountdown: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#fbbf24',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  goldPackageCountdownContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  goldPackageIcon: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#fef3c7',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  goldPackageCountdownText: {
-    flex: 1,
-  },
-  goldPackageCountdownTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  goldPackageCountdownDate: {
-    fontSize: 14,
-    color: '#f59e0b',
-    fontWeight: '600',
-  },
-  dailyTipCard: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  dailyTipHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  dailyTipLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  dailyTipIcon: {
-    width: 48,
-    height: 48,
-    backgroundColor: '#6b46c1',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  dailyTipIconText: {
-    fontSize: 24,
-    color: 'white',
-  },
-  dailyTipTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  dailyTipCategory: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  dailyTipEmoji: {
-    fontSize: 48,
-  },
-  dailyTipText: {
-    fontSize: 16,
-    color: '#374151',
-    lineHeight: 24,
-    marginBottom: 16,
-  },
-  dailyTipTag: {
-    backgroundColor: '#fdf2f8',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  dailyTipTagText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#ec4899',
-  },
-  quickActions: {
-    gap: 12,
-    marginBottom: 16,
-  },
-  quickActionCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  quickActionContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  quickActionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  quickActionText: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  quickActionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  quickActionSubtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  notificationBadge: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 20,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  notificationBadgeText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  heroCard: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 32,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  heroContent: {
-    alignItems: 'center',
-  },
-  heroTag: {
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginBottom: 16,
-  },
-  heroTagText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6b46c1',
-  },
-  heroTitle: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 12,
-    lineHeight: 36,
+    color: '#fff',
+    marginTop: 4,
   },
-  heroTitleGradient: {
-    color: '#6b46c1',
-  },
-  heroDescription: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 24,
-  },
-  heroButton: {
-    backgroundColor: '#6b46c1',
+  weatherContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
-    gap: 12,
+    marginTop: 8,
   },
-  heroButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+  weatherText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+    marginLeft: 6,
   },
-  featuresGrid: {
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  premiumBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 2,
+  },
+  beautyScoreContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 24,
+    justifyContent: 'space-around',
+    marginTop: 20,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
   },
-  featureCard: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 24,
-    width: '47%',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  featureIcon: {
-    width: 40,
-    height: 40,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    justifyContent: 'center',
+  scoreBox: {
     alignItems: 'center',
-    marginBottom: 12,
   },
-  featureTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+  scoreLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
     marginBottom: 8,
   },
-  featureDescription: {
+  scoreCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.4)',
+  },
+  scoreValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginTop: 25,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  sectionAction: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#6b46c1',
+    fontWeight: '500',
+  },
+  routineContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  routineTask: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  routineTaskCompleted: {
+    opacity: 0.6,
+  },
+  routineCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  routineCheckboxCompleted: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  routineTaskText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+  },
+  routineTaskTextCompleted: {
+    textDecorationLine: 'line-through',
+    color: '#999',
+  },
+  progressContainer: {
+    marginTop: 16,
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+  },
+  progressText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  quickActionCard: {
+    width: (width - 50) / 2,
+    height: 120,
+    marginBottom: 10,
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  quickActionGradient: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  quickActionTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 8,
+  },
+  quickActionSubtitle: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  tipCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  tipGradient: {
+    padding: 20,
+  },
+  tipHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  tipTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FF8C00',
+    marginLeft: 8,
+    flex: 1,
+  },
+  tipBadge: {
+    backgroundColor: '#FF8C00',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  tipBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  tipSubtitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  tipContent: {
+    fontSize: 14,
+    color: '#666',
     lineHeight: 20,
   },
-  premiumCard: {
-    backgroundColor: '#6b46c1',
+  weatherAdvice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#FFE4B5',
+  },
+  weatherAdviceText: {
+    fontSize: 13,
+    color: '#FF6347',
+    marginLeft: 6,
+    flex: 1,
+  },
+  achievementCard: {
+    width: 120,
+    backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 24,
-    marginBottom: 32,
+    padding: 16,
+    marginRight: 12,
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  achievementCardUnlocked: {
+    backgroundColor: '#FFF9E6',
+    borderWidth: 2,
+    borderColor: '#FFD700',
+  },
+  achievementIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  achievementIconUnlocked: {
+    backgroundColor: '#FFE4B5',
+  },
+  achievementTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  achievementProgress: {
+    width: '100%',
+  },
+  achievementProgressBar: {
+    height: 4,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  achievementProgressFill: {
+    height: '100%',
+    backgroundColor: '#FFD700',
+  },
+  achievementProgressText: {
+    fontSize: 11,
+    color: '#999',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  productCard: {
+    width: 140,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginRight: 12,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  productImage: {
+    width: '100%',
+    height: 140,
+    backgroundColor: '#f0f0f0',
+  },
+  productInfo: {
+    padding: 12,
+  },
+  productBrand: {
+    fontSize: 12,
+    color: '#999',
+    textTransform: 'uppercase',
+  },
+  productName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 2,
+    height: 36,
+  },
+  productRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  productRatingText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 4,
+  },
+  premiumBanner: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  premiumGradient: {
+    padding: 20,
   },
   premiumContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+  },
+  premiumLeft: {
+    marginRight: 16,
+  },
+  premiumCenter: {
+    flex: 1,
   },
   premiumTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#fff',
     marginBottom: 4,
   },
-  premiumDescription: {
+  premiumSubtitle: {
     fontSize: 14,
-    color: '#e0e7ff',
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 12,
   },
-  premiumButton: {
-    backgroundColor: 'white',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+  premiumFeatures: {
+    gap: 6,
   },
-  premiumButtonText: {
-    color: '#6b46c1',
-    fontWeight: '600',
+  premiumFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  premiumFeatureText: {
+    fontSize: 12,
+    color: '#fff',
+    marginLeft: 6,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#f8f9fa',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
     paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#e0e0e0',
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#1a1a1a',
   },
   modalContent: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    padding: 20,
   },
-  notificationItem: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+  routineSection: {
+    marginBottom: 30,
   },
-  notificationTitle: {
-    fontSize: 16,
+  routineSectionTitle: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#333',
+    marginBottom: 16,
   },
-  notificationMessage: {
-    fontSize: 14,
-    color: '#374151',
+  routineModalTask: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 8,
   },
-  notificationTime: {
-    fontSize: 12,
-    color: '#6b7280',
+  routineModalTaskCompleted: {
+    backgroundColor: '#E8F5E9',
   },
-  analysisItem: {
-    backgroundColor: '#f3f4f6',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  analysisTitle: {
+  routineModalTaskText: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#333',
+    marginLeft: 12,
   },
-  analysisDetails: {
-    fontSize: 14,
-    color: '#374151',
-    marginBottom: 8,
-  },
-  analysisTime: {
-    fontSize: 12,
-    color: '#6b7280',
+  routineModalTaskTextCompleted: {
+    color: '#4CAF50',
   },
 });
+
+export default HomeScreen;
