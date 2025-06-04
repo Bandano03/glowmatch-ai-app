@@ -8,77 +8,172 @@ import {
   Image,
   TextInput,
   Modal,
-  FlatList,
-  Dimensions,
+  Switch,
   Alert,
   ActivityIndicator,
   Animated,
+  Dimensions,
+  Platform,
+  Linking,
   Share,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
 import * as Haptics from 'expo-haptics';
+import * as LocalAuthentication from 'expo-local-authentication';
+import * as Notifications from 'expo-notifications';
 import { UserContext } from '../../App';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 
-interface Recipe {
-  id: string;
-  title: string;
-  category: 'face' | 'hair' | 'body' | 'lips';
-  difficulty: 'easy' | 'medium' | 'hard';
-  time: number; // in minutes
-  ingredients: string[];
-  instructions: string[];
-  benefits: string[];
-  image: string;
-  isPremium: boolean;
-  rating: number;
-  reviews: number;
-  isFavorite: boolean;
-  videoUrl?: string;
-  tips?: string[];
-  warnings?: string[];
-}
-
-interface Category {
+interface UserProfile {
   id: string;
   name: string;
-  icon: string;
-  color: string[];
+  email: string;
+  avatar: string;
+  phone?: string;
+  birthDate?: string;
+  skinType?: string;
+  hairType?: string;
+  concerns: string[];
+  allergies: string[];
+  joinedDate: Date;
 }
 
-export function RecipesScreen() {
-  const { user, premiumTier, purchasedRecipes, addPurchasedRecipe } = useContext(UserContext);
+interface Settings {
+  notifications: {
+    enabled: boolean;
+    dailyReminder: boolean;
+    productRecommendations: boolean;
+    analysisReminder: boolean;
+    reminderTime: string;
+  };
+  privacy: {
+    shareAnalytics: boolean;
+    personalizedAds: boolean;
+    biometricAuth: boolean;
+  };
+  appearance: {
+    darkMode: boolean;
+    language: string;
+    fontSize: 'small' | 'medium' | 'large';
+  };
+  data: {
+    autoBackup: boolean;
+    backupFrequency: 'daily' | 'weekly' | 'monthly';
+    lastBackup?: Date;
+  };
+}
+
+interface PremiumPlan {
+  id: string;
+  name: string;
+  price: number;
+  period: string;
+  features: string[];
+  popular?: boolean;
+  savings?: string;
+}
+
+export function ProfileScreen() {
+  const navigation = useNavigation();
+  const { user, premiumTier, updatePremiumTier, logout } = useContext(UserContext);
   
   // States
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [settings, setSettings] = useState<Settings>({
+    notifications: {
+      enabled: true,
+      dailyReminder: true,
+      productRecommendations: true,
+      analysisReminder: false,
+      reminderTime: '09:00',
+    },
+    privacy: {
+      shareAnalytics: false,
+      personalizedAds: false,
+      biometricAuth: false,
+    },
+    appearance: {
+      darkMode: false,
+      language: 'de',
+      fontSize: 'medium',
+    },
+    data: {
+      autoBackup: true,
+      backupFrequency: 'weekly',
+    },
+  });
+  
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'time'>('newest');
+  const [editedProfile, setEditedProfile] = useState<UserProfile | null>(null);
+  const [selectedSettingCategory, setSelectedSettingCategory] = useState<string>('');
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+
+  // Premium Plans
+  const premiumPlans: PremiumPlan[] = [
+    {
+      id: 'monthly',
+      name: 'Monatlich',
+      price: 9.99,
+      period: 'pro Monat',
+      features: [
+        'Unbegrenzte Analysen',
+        'Alle Premium Rezepte',
+        'Persönliche Beratung',
+        'Werbefreie Nutzung',
+        'Früher Zugang zu neuen Features',
+      ],
+    },
+    {
+      id: 'yearly',
+      name: 'Jährlich',
+      price: 79.99,
+      period: 'pro Jahr',
+      features: [
+        'Alles aus dem Monatsabo',
+        'Sparen Sie 33%',
+        'Exklusive Masterclasses',
+        'Premium Support',
+        'Personalisierte Berichte',
+      ],
+      popular: true,
+      savings: 'Sparen Sie 40€',
+    },
+    {
+      id: 'gold',
+      name: 'Gold Membership',
+      price: 149.99,
+      period: 'pro Jahr',
+      features: [
+        'Alles aus dem Jahresabo',
+        'Persönlicher Beauty Coach',
+        'Monatliche Produktpakete',
+        'VIP Events & Workshops',
+        'Lebenslange Updates',
+      ],
+      savings: 'Unser bestes Angebot',
+    },
+  ];
 
   useEffect(() => {
-    loadData();
+    loadUserData();
+    checkBiometric();
     startAnimations();
   }, []);
-
-  useEffect(() => {
-    filterRecipes();
-  }, [selectedCategory, searchQuery, recipes, selectedDifficulty, sortBy]);
 
   const startAnimations = () => {
     Animated.parallel([
@@ -92,542 +187,501 @@ export function RecipesScreen() {
         duration: 600,
         useNativeDriver: true,
       }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
     ]).start();
   };
 
-  const loadData = async () => {
+  const checkBiometric = async () => {
+    const compatible = await LocalAuthentication.hasHardwareAsync();
+    const enrolled = await LocalAuthentication.isEnrolledAsync();
+    setBiometricAvailable(compatible && enrolled);
+  };
+
+  const loadUserData = async () => {
     setLoading(true);
     try {
-      // Load categories
-      const categoriesData: Category[] = [
-        { id: 'all', name: 'Alle', icon: 'apps', color: ['#6b46c1', '#8b5cf6'] },
-        { id: 'face', name: 'Gesicht', icon: 'happy', color: ['#4ECDC4', '#44A08D'] },
-        { id: 'hair', name: 'Haare', icon: 'cut', color: ['#FFB923', '#FF6B6B'] },
-        { id: 'body', name: 'Körper', icon: 'body', color: ['#A8E6CF', '#7FD8BE'] },
-        { id: 'lips', name: 'Lippen', icon: 'heart', color: ['#FF6B9D', '#FEC8D8'] },
-      ];
-      setCategories(categoriesData);
+      // Load profile
+      const savedProfile = await AsyncStorage.getItem('userProfile');
+      if (savedProfile) {
+        setProfile(JSON.parse(savedProfile));
+      } else {
+        // Create default profile
+        const defaultProfile: UserProfile = {
+          id: user?.id || '1',
+          name: user?.name || 'Beauty Lover',
+          email: user?.email || 'user@glowmatch.ai',
+          avatar: user?.avatar || 'https://ui-avatars.com/api/?name=User&background=6b46c1&color=fff',
+          concerns: [],
+          allergies: [],
+          joinedDate: new Date(),
+        };
+        setProfile(defaultProfile);
+      }
 
-      // Load recipes
-      const recipesData: Recipe[] = [
-        {
-          id: '1',
-          title: 'Avocado Honig Gesichtsmaske',
-          category: 'face',
-          difficulty: 'easy',
-          time: 15,
-          ingredients: [
-            '1/2 reife Avocado',
-            '1 EL Bio-Honig',
-            '1 TL Joghurt',
-            '2 Tropfen Vitamin E Öl (optional)'
-          ],
-          instructions: [
-            'Avocado in einer Schüssel zerdrücken bis eine cremige Masse entsteht',
-            'Honig und Joghurt hinzufügen und gut vermischen',
-            'Optional: Vitamin E Öl für extra Pflege hinzufügen',
-            'Gesicht reinigen und die Maske gleichmäßig auftragen',
-            '15-20 Minuten einwirken lassen',
-            'Mit lauwarmem Wasser abspülen und Gesicht trocken tupfen',
-            'Anschließend Ihre normale Feuchtigkeitscreme auftragen'
-          ],
-          benefits: [
-            'Intensive Feuchtigkeitspflege',
-            'Reich an Vitaminen A, D und E',
-            'Beruhigt gereizte Haut',
-            'Verbessert die Hautelastizität',
-            'Natürliche Anti-Aging Wirkung'
-          ],
-          image: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273',
-          isPremium: false,
-          rating: 4.8,
-          reviews: 234,
-          isFavorite: false,
-          tips: [
-            'Verwenden Sie nur reife Avocados für beste Ergebnisse',
-            'Testen Sie die Maske erst an einer kleinen Hautstelle',
-            'Ideal für trockene und normale Hauttypen'
-          ],
-          warnings: [
-            'Nicht bei Avocado-Allergie verwenden',
-            'Vermeiden Sie die Augenpartie'
-          ]
-        },
-        {
-          id: '2',
-          title: 'Kokosöl Haarmaske',
-          category: 'hair',
-          difficulty: 'easy',
-          time: 30,
-          ingredients: [
-            '3 EL Kokosöl',
-            '1 EL Honig',
-            '1 Ei (optional für extra Protein)',
-            '5 Tropfen Rosmarinöl'
-          ],
-          instructions: [
-            'Kokosöl bei Bedarf leicht erwärmen bis es flüssig ist',
-            'Honig und optional das Ei hinzufügen',
-            'Rosmarinöl für bessere Durchblutung einrühren',
-            'Haare anfeuchten und die Maske vom Ansatz bis in die Spitzen einmassieren',
-            '30-45 Minuten einwirken lassen (mit Handtuch umwickeln)',
-            'Gründlich mit Shampoo auswaschen (evtl. 2x shampoonieren)'
-          ],
-          benefits: [
-            'Tiefenwirksame Pflege',
-            'Repariert geschädigtes Haar',
-            'Verleiht Glanz und Geschmeidigkeit',
-            'Fördert das Haarwachstum',
-            'Reduziert Spliss'
-          ],
-          image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc',
-          isPremium: false,
-          rating: 4.9,
-          reviews: 456,
-          isFavorite: false,
-          videoUrl: 'https://example.com/hair-mask-tutorial'
-        },
-        {
-          id: '3',
-          title: 'Kaffee-Peeling für strahlende Haut',
-          category: 'body',
-          difficulty: 'easy',
-          time: 10,
-          ingredients: [
-            '1/2 Tasse Kaffeesatz',
-            '1/4 Tasse Kokosöl',
-            '1/4 Tasse brauner Zucker',
-            '1 TL Vanilleextrakt'
-          ],
-          instructions: [
-            'Alle Zutaten in einer Schüssel vermischen',
-            'Unter der Dusche auf die feuchte Haut auftragen',
-            'In kreisenden Bewegungen einmassieren',
-            '5-10 Minuten einwirken lassen',
-            'Mit warmem Wasser abspülen'
-          ],
-          benefits: [
-            'Entfernt abgestorbene Hautzellen',
-            'Regt die Durchblutung an',
-            'Kann Cellulite mindern',
-            'Macht die Haut weich und glatt'
-          ],
-          image: 'https://images.unsplash.com/photo-1570554520913-ce3192c34509',
-          isPremium: true,
-          rating: 4.7,
-          reviews: 189,
-          isFavorite: false
-        },
-        {
-          id: '4',
-          title: 'Grüntee Toner',
-          category: 'face',
-          difficulty: 'easy',
-          time: 20,
-          ingredients: [
-            '1 Tasse grüner Tee (stark gebrüht)',
-            '2 EL Apfelessig',
-            '5 Tropfen Teebaumöl',
-            '1 EL Aloe Vera Gel'
-          ],
-          instructions: [
-            'Grünen Tee aufbrühen und vollständig abkühlen lassen',
-            'Apfelessig und Aloe Vera Gel hinzufügen',
-            'Teebaumöl einrühren',
-            'In eine saubere Sprühflasche füllen',
-            'Nach der Reinigung auf das Gesicht sprühen oder mit Wattepad auftragen'
-          ],
-          benefits: [
-            'Verfeinert die Poren',
-            'Wirkt entzündungshemmend',
-            'Reguliert die Talgproduktion',
-            'Reich an Antioxidantien'
-          ],
-          image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883',
-          isPremium: true,
-          rating: 4.6,
-          reviews: 98,
-          isFavorite: false
-        },
-        {
-          id: '5',
-          title: 'Honig-Zimt Lippenpeeling',
-          category: 'lips',
-          difficulty: 'easy',
-          time: 5,
-          ingredients: [
-            '1 TL Honig',
-            '1 TL brauner Zucker',
-            '1/2 TL Zimt',
-            '1/2 TL Kokosöl'
-          ],
-          instructions: [
-            'Alle Zutaten vermischen',
-            'Sanft auf die Lippen auftragen',
-            '1-2 Minuten massieren',
-            'Mit warmem Wasser abspülen',
-            'Lippenbalsam auftragen'
-          ],
-          benefits: [
-            'Entfernt trockene Hautschüppchen',
-            'Macht die Lippen weich',
-            'Regt die Durchblutung an',
-            'Natürliches Volumen'
-          ],
-          image: 'https://images.unsplash.com/photo-1583248369069-9d91f1640fe6',
-          isPremium: false,
-          rating: 4.9,
-          reviews: 321,
-          isFavorite: false
-        }
-      ];
-      setRecipes(recipesData);
-
-      // Load favorites
-      const savedFavorites = await AsyncStorage.getItem('favoriteRecipes');
-      if (savedFavorites) {
-        setFavorites(JSON.parse(savedFavorites));
+      // Load settings
+      const savedSettings = await AsyncStorage.getItem('userSettings');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
       }
     } catch (error) {
-      console.error('Error loading recipes:', error);
+      console.error('Error loading user data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const filterRecipes = () => {
-    let filtered = [...recipes];
+  const saveProfile = async () => {
+    if (!editedProfile) return;
 
-    // Category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(r => r.category === selectedCategory);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    try {
+      await AsyncStorage.setItem('userProfile', JSON.stringify(editedProfile));
+      setProfile(editedProfile);
+      setShowEditProfile(false);
+      Alert.alert('Erfolg', 'Profil wurde aktualisiert!');
+    } catch (error) {
+      Alert.alert('Fehler', 'Profil konnte nicht gespeichert werden.');
     }
-
-    // Search filter
-    if (searchQuery) {
-      filtered = filtered.filter(r => 
-        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.ingredients.some(i => i.toLowerCase().includes(searchQuery.toLowerCase()))
-      );
-    }
-
-    // Difficulty filter
-    if (selectedDifficulty !== 'all') {
-      filtered = filtered.filter(r => r.difficulty === selectedDifficulty);
-    }
-
-    // Sorting
-    switch (sortBy) {
-      case 'popular':
-        filtered.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'time':
-        filtered.sort((a, b) => a.time - b.time);
-        break;
-      case 'newest':
-      default:
-        // Keep original order
-        break;
-    }
-
-    setFilteredRecipes(filtered);
   };
 
-  const toggleFavorite = async (recipeId: string) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    
-    const newFavorites = favorites.includes(recipeId)
-      ? favorites.filter(id => id !== recipeId)
-      : [...favorites, recipeId];
-    
-    setFavorites(newFavorites);
-    await AsyncStorage.setItem('favoriteRecipes', JSON.stringify(newFavorites));
-    
-    setRecipes(prev => prev.map(recipe => 
-      recipe.id === recipeId 
-        ? { ...recipe, isFavorite: !recipe.isFavorite }
-        : recipe
-    ));
+  const saveSettings = async (newSettings: Settings) => {
+    try {
+      await AsyncStorage.setItem('userSettings', JSON.stringify(newSettings));
+      setSettings(newSettings);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
   };
 
-  const canAccessRecipe = (recipe: Recipe): boolean => {
-    if (!recipe.isPremium) return true;
-    if (premiumTier !== 'basic') return true;
-    if (purchasedRecipes.includes(recipe.id)) return true;
-    return false;
+  const handleImagePicker = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && editedProfile) {
+      setEditedProfile({ ...editedProfile, avatar: result.assets[0].uri });
+    }
   };
 
-  const handleRecipePress = async (recipe: Recipe) => {
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
-    if (!canAccessRecipe(recipe)) {
+  const handleBiometricToggle = async (enabled: boolean) => {
+    if (enabled && biometricAvailable) {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authentifizieren Sie sich für biometrische Anmeldung',
+      });
+      
+      if (result.success) {
+        const newSettings = {
+          ...settings,
+          privacy: { ...settings.privacy, biometricAuth: true }
+        };
+        saveSettings(newSettings);
+      }
+    } else {
+      const newSettings = {
+        ...settings,
+        privacy: { ...settings.privacy, biometricAuth: false }
+      };
+      saveSettings(newSettings);
+    }
+  };
+
+  const handleNotificationPermission = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
       Alert.alert(
-        'Premium Rezept',
-        'Dieses Rezept ist nur für Premium-Mitglieder verfügbar. Möchten Sie es für 0,99€ einzeln kaufen oder Premium werden?',
+        'Benachrichtigungen',
+        'Bitte erlauben Sie Benachrichtigungen in den Einstellungen.',
         [
           { text: 'Abbrechen', style: 'cancel' },
-          { 
-            text: 'Einzeln kaufen (0,99€)', 
-            onPress: () => handleSinglePurchase(recipe)
-          },
-          { 
-            text: 'Premium werden', 
-            onPress: () => console.log('Navigate to premium')
-          }
+          { text: 'Einstellungen', onPress: () => Linking.openSettings() }
         ]
       );
-      return;
-    }
-    
-    setSelectedRecipe(recipe);
-    setShowRecipeModal(true);
-  };
-
-  const handleSinglePurchase = async (recipe: Recipe) => {
-    // Hier würde die echte Kaufabwicklung stattfinden
-    Alert.alert('Kauf erfolgreich!', `Sie haben "${recipe.title}" erfolgreich gekauft.`);
-    addPurchasedRecipe(recipe.id);
-  };
-
-  const shareRecipe = async (recipe: Recipe) => {
-    try {
-      await Share.share({
-        message: `Schau dir dieses tolle DIY Beauty-Rezept an: ${recipe.title}\n\nZutaten:\n${recipe.ingredients.join('\n')}\n\nFinde mehr Rezepte in der GlowMatch App!`,
-        title: recipe.title,
-      });
-    } catch (error) {
-      console.error('Share error:', error);
     }
   };
 
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
-      case 'easy': return '#4CAF50';
-      case 'medium': return '#FFB923';
-      case 'hard': return '#FF6B6B';
-      default: return '#999';
-    }
-  };
-
-  const renderRecipeCard = ({ item }: { item: Recipe }) => {
-    const isAccessible = canAccessRecipe(item);
-    const isFavorite = favorites.includes(item.id);
-
-    return (
-      <TouchableOpacity
-        style={styles.recipeCard}
-        onPress={() => handleRecipePress(item)}
-        activeOpacity={0.9}
-      >
-        <View style={styles.recipeImageContainer}>
-          <Image 
-            source={{ uri: item.image }} 
-            style={styles.recipeImage}
-          />
-          {!isAccessible && (
-            <View style={styles.premiumOverlay}>
-              <Ionicons name="lock-closed" size={32} color="#fff" />
-              <Text style={styles.premiumText}>Premium</Text>
-            </View>
-          )}
-          <TouchableOpacity
-            style={styles.favoriteButton}
-            onPress={() => toggleFavorite(item.id)}
-          >
-            <Ionicons 
-              name={isFavorite ? "heart" : "heart-outline"} 
-              size={24} 
-              color={isFavorite ? "#FF6B6B" : "#fff"} 
-            />
-          </TouchableOpacity>
-          <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(item.difficulty) }]}>
-            <Text style={styles.difficultyText}>
-              {item.difficulty === 'easy' ? 'Einfach' : 
-               item.difficulty === 'medium' ? 'Mittel' : 'Schwer'}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.recipeInfo}>
-          <Text style={styles.recipeTitle} numberOfLines={2}>{item.title}</Text>
-          
-          <View style={styles.recipeDetails}>
-            <View style={styles.detailItem}>
-              <Ionicons name="time-outline" size={16} color="#666" />
-              <Text style={styles.detailText}>{item.time} Min</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Ionicons name="star" size={16} color="#FFD700" />
-              <Text style={styles.detailText}>{item.rating}</Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Ionicons name="chatbubble-outline" size={16} color="#666" />
-              <Text style={styles.detailText}>{item.reviews}</Text>
-            </View>
-          </View>
-          
-          <View style={styles.benefitsPreview}>
-            {item.benefits.slice(0, 2).map((benefit, index) => (
-              <View key={index} style={styles.benefitChip}>
-                <Text style={styles.benefitText} numberOfLines={1}>{benefit}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </TouchableOpacity>
+  const handlePremiumPurchase = (plan: PremiumPlan) => {
+    Alert.alert(
+      'Premium Upgrade',
+      `Möchten Sie ${plan.name} für ${plan.price}€ ${plan.period} abonnieren?`,
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Kaufen',
+          onPress: async () => {
+            // Hier würde die echte Kaufabwicklung stattfinden
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            updatePremiumTier(plan.id === 'gold' ? 'gold' : 'silver');
+            setShowPremiumModal(false);
+            Alert.alert('Erfolg!', 'Willkommen als Premium-Mitglied!');
+          }
+        }
+      ]
     );
   };
 
-  const renderRecipeModal = () => {
-    if (!selectedRecipe) return null;
+  const handleExportData = async () => {
+    const data = {
+      profile,
+      settings,
+      exportDate: new Date().toISOString(),
+    };
+    
+    try {
+      await Share.share({
+        message: JSON.stringify(data, null, 2),
+        title: 'GlowMatch Datenexport',
+      });
+    } catch (error) {
+      Alert.alert('Fehler', 'Daten konnten nicht exportiert werden.');
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Account löschen',
+      'Sind Sie sicher? Diese Aktion kann nicht rückgängig gemacht werden.',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Löschen',
+          style: 'destructive',
+          onPress: async () => {
+            // Hier würde die echte Account-Löschung stattfinden
+            await AsyncStorage.clear();
+            logout();
+          }
+        }
+      ]
+    );
+  };
+
+  const renderHeader = () => {
+    if (!profile) return null;
+
+    return (
+      <LinearGradient
+        colors={['#6b46c1', '#8b5cf6']}
+        style={styles.header}
+      >
+        <Animated.View 
+          style={[
+            styles.headerContent,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+          ]}
+        >
+          <View style={styles.profileSection}>
+            <TouchableOpacity onPress={() => setShowEditProfile(true)}>
+              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+              <View style={styles.editAvatarBadge}>
+                <Ionicons name="camera" size={16} color="#fff" />
+              </View>
+            </TouchableOpacity>
+            
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{profile.name}</Text>
+              <Text style={styles.profileEmail}>{profile.email}</Text>
+              <View style={styles.premiumBadge}>
+                <Ionicons 
+                  name={premiumTier === 'gold' ? 'star' : premiumTier === 'silver' ? 'star-half' : 'star-outline'} 
+                  size={16} 
+                  color="#FFD700" 
+                />
+                <Text style={styles.premiumText}>
+                  {premiumTier === 'gold' ? 'Gold Member' : 
+                   premiumTier === 'silver' ? 'Silver Member' : 'Basic'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.statsContainer}>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>127</Text>
+              <Text style={styles.statLabel}>Analysen</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>45</Text>
+              <Text style={styles.statLabel}>Rezepte</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>89</Text>
+              <Text style={styles.statLabel}>Tage dabei</Text>
+            </View>
+          </View>
+        </Animated.View>
+      </LinearGradient>
+    );
+  };
+
+  const renderMenuSection = () => {
+    const menuItems = [
+      {
+        id: 'premium',
+        title: 'Premium Upgrade',
+        subtitle: premiumTier === 'basic' ? 'Alle Features freischalten' : 'Ihr Abo verwalten',
+        icon: 'star',
+        color: '#FFD700',
+        onPress: () => setShowPremiumModal(true),
+        showBadge: premiumTier === 'basic',
+      },
+      {
+        id: 'profile',
+        title: 'Profil bearbeiten',
+        subtitle: 'Persönliche Daten & Präferenzen',
+        icon: 'person',
+        color: '#4ECDC4',
+        onPress: () => setShowEditProfile(true),
+      },
+      {
+        id: 'settings',
+        title: 'Einstellungen',
+        subtitle: 'App-Einstellungen & Datenschutz',
+        icon: 'settings',
+        color: '#6b46c1',
+        onPress: () => setShowSettings(true),
+      },
+      {
+        id: 'history',
+        title: 'Meine Aktivitäten',
+        subtitle: 'Analysen, Rezepte & Favoriten',
+        icon: 'time',
+        color: '#FFB923',
+        onPress: () => navigation.navigate('Verlauf' as never),
+      },
+      {
+        id: 'share',
+        title: 'App teilen',
+        subtitle: 'Freunde einladen & Prämien erhalten',
+        icon: 'share-social',
+        color: '#FF6B6B',
+        onPress: () => {
+          Share.share({
+            message: 'Entdecke GlowMatch - Die KI Beauty App! 🌟\n\nDownload: https://glowmatch.ai/download',
+            title: 'GlowMatch empfehlen',
+          });
+        },
+      },
+      {
+        id: 'help',
+        title: 'Hilfe & Support',
+        subtitle: 'FAQ, Kontakt & Tutorials',
+        icon: 'help-circle',
+        color: '#00BFA5',
+        onPress: () => Alert.alert('Support', 'support@glowmatch.ai'),
+      },
+      {
+        id: 'about',
+        title: 'Über GlowMatch',
+        subtitle: 'Version 1.0.0',
+        icon: 'information-circle',
+        color: '#9C27B0',
+        onPress: () => Alert.alert('GlowMatch', 'Version 1.0.0\n\n© 2024 GlowMatch AI'),
+      },
+    ];
+
+    return (
+      <Animated.View style={[styles.menuSection, { opacity: fadeAnim }]}>
+        {menuItems.map((item, index) => (
+          <TouchableOpacity
+            key={item.id}
+            style={[
+              styles.menuItem,
+              index === menuItems.length - 1 && styles.menuItemLast
+            ]}
+            onPress={item.onPress}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}20` }]}>
+              <Ionicons name={item.icon as any} size={24} color={item.color} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+            </View>
+            <View style={styles.menuRight}>
+              {item.showBadge && (
+                <View style={styles.newBadge}>
+                  <Text style={styles.newBadgeText}>NEU</Text>
+                </View>
+              )}
+              <Ionicons name="chevron-forward" size={20} color="#999" />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </Animated.View>
+    );
+  };
+
+  const renderEditProfileModal = () => {
+    if (!profile) return null;
 
     return (
       <Modal
-        visible={showRecipeModal}
+        visible={showEditProfile}
         animationType="slide"
         presentationStyle="pageSheet"
-        onRequestClose={() => setShowRecipeModal(false)}
+        onRequestClose={() => setShowEditProfile(false)}
       >
         <View style={styles.modalContainer}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {/* Header Image */}
-            <View style={styles.modalImageContainer}>
+          <View style={styles.modalHeader}>
+            <TouchableOpacity onPress={() => setShowEditProfile(false)}>
+              <Text style={styles.modalCancel}>Abbrechen</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Profil bearbeiten</Text>
+            <TouchableOpacity onPress={saveProfile}>
+              <Text style={styles.modalSave}>Speichern</Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalContent}>
+            <TouchableOpacity style={styles.avatarEditContainer} onPress={handleImagePicker}>
               <Image 
-                source={{ uri: selectedRecipe.image }} 
-                style={styles.modalImage}
+                source={{ uri: editedProfile?.avatar || profile.avatar }} 
+                style={styles.avatarEdit} 
               />
-              <LinearGradient
-                colors={['transparent', 'rgba(0,0,0,0.8)']}
-                style={styles.modalImageGradient}
-              >
-                <TouchableOpacity
-                  style={styles.modalCloseButton}
-                  onPress={() => setShowRecipeModal(false)}
-                >
-                  <BlurView intensity={80} style={styles.blurButton}>
-                    <Ionicons name="close" size={24} color="#fff" />
-                  </BlurView>
-                </TouchableOpacity>
-                
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{selectedRecipe.title}</Text>
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => toggleFavorite(selectedRecipe.id)}
-                    >
-                      <Ionicons 
-                        name={favorites.includes(selectedRecipe.id) ? "heart" : "heart-outline"} 
-                        size={24} 
-                        color="#fff" 
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => shareRecipe(selectedRecipe)}
-                    >
-                      <Ionicons name="share-outline" size={24} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </LinearGradient>
+              <View style={styles.avatarEditOverlay}>
+                <Ionicons name="camera" size={32} color="#fff" />
+                <Text style={styles.avatarEditText}>Foto ändern</Text>
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Name</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.name || profile.name}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, name: text })}
+                placeholder="Ihr Name"
+              />
             </View>
 
-            <View style={styles.modalContent}>
-              {/* Quick Info */}
-              <View style={styles.quickInfo}>
-                <View style={styles.infoBox}>
-                  <Ionicons name="time" size={24} color="#6b46c1" />
-                  <Text style={styles.infoLabel}>Zeit</Text>
-                  <Text style={styles.infoValue}>{selectedRecipe.time} Min</Text>
-                </View>
-                <View style={styles.infoBox}>
-                  <Ionicons name="speedometer" size={24} color="#FFB923" />
-                  <Text style={styles.infoLabel}>Schwierigkeit</Text>
-                  <Text style={styles.infoValue}>
-                    {selectedRecipe.difficulty === 'easy' ? 'Einfach' : 
-                     selectedRecipe.difficulty === 'medium' ? 'Mittel' : 'Schwer'}
-                  </Text>
-                </View>
-                <View style={styles.infoBox}>
-                  <Ionicons name="star" size={24} color="#FFD700" />
-                  <Text style={styles.infoLabel}>Bewertung</Text>
-                  <Text style={styles.infoValue}>{selectedRecipe.rating}/5</Text>
-                </View>
-              </View>
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>E-Mail</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.email || profile.email}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, email: text })}
+                placeholder="ihre.email@beispiel.de"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
 
-              {/* Benefits */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Vorteile</Text>
-                {selectedRecipe.benefits.map((benefit, index) => (
-                  <View key={index} style={styles.benefitItem}>
-                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-                    <Text style={styles.benefitItemText}>{benefit}</Text>
-                  </View>
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Telefon</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.phone || profile.phone}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, phone: text })}
+                placeholder="+49 123 456789"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Geburtsdatum</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.birthDate || profile.birthDate}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, birthDate: text })}
+                placeholder="TT.MM.JJJJ"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Hauttyp</Text>
+              <View style={styles.chipContainer}>
+                {['Normal', 'Trocken', 'Fettig', 'Mischhaut', 'Sensibel'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.chip,
+                      (editedProfile?.skinType || profile.skinType) === type && styles.chipActive
+                    ]}
+                    onPress={() => setEditedProfile({ ...profile, ...editedProfile, skinType: type })}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      (editedProfile?.skinType || profile.skinType) === type && styles.chipTextActive
+                    ]}>
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
               </View>
+            </View>
 
-              {/* Ingredients */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Zutaten</Text>
-                {selectedRecipe.ingredients.map((ingredient, index) => (
-                  <View key={index} style={styles.ingredientItem}>
-                    <View style={styles.ingredientBullet} />
-                    <Text style={styles.ingredientText}>{ingredient}</Text>
-                  </View>
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Haartyp</Text>
+              <View style={styles.chipContainer}>
+                {['1A-1C', '2A-2C', '3A-3C', '4A-4C'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.chip,
+                      (editedProfile?.hairType || profile.hairType) === type && styles.chipActive
+                    ]}
+                    onPress={() => setEditedProfile({ ...profile, ...editedProfile, hairType: type })}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      (editedProfile?.hairType || profile.hairType) === type && styles.chipTextActive
+                    ]}>
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
               </View>
+            </View>
 
-              {/* Instructions */}
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Anleitung</Text>
-                {selectedRecipe.instructions.map((instruction, index) => (
-                  <View key={index} style={styles.instructionItem}>
-                    <View style={styles.instructionNumber}>
-                      <Text style={styles.instructionNumberText}>{index + 1}</Text>
-                    </View>
-                    <Text style={styles.instructionText}>{instruction}</Text>
-                  </View>
-                ))}
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Hautprobleme</Text>
+              <View style={styles.chipContainer}>
+                {['Akne', 'Rötungen', 'Pigmentflecken', 'Falten', 'Trockenheit'].map((concern) => {
+                  const concerns = editedProfile?.concerns || profile.concerns || [];
+                  const isSelected = concerns.includes(concern);
+                  
+                  return (
+                    <TouchableOpacity
+                      key={concern}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => {
+                        const newConcerns = isSelected
+                          ? concerns.filter(c => c !== concern)
+                          : [...concerns, concern];
+                        setEditedProfile({ ...profile, ...editedProfile, concerns: newConcerns });
+                      }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {concern}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
+            </View>
 
-              {/* Tips */}
-              {selectedRecipe.tips && selectedRecipe.tips.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Tipps</Text>
-                  <View style={styles.tipsContainer}>
-                    {selectedRecipe.tips.map((tip, index) => (
-                      <View key={index} style={styles.tipItem}>
-                        <Ionicons name="bulb" size={16} color="#FFB923" />
-                        <Text style={styles.tipText}>{tip}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Warnings */}
-              {selectedRecipe.warnings && selectedRecipe.warnings.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Hinweise</Text>
-                  <View style={styles.warningsContainer}>
-                    {selectedRecipe.warnings.map((warning, index) => (
-                      <View key={index} style={styles.warningItem}>
-                        <Ionicons name="warning" size={16} color="#FF6B6B" />
-                        <Text style={styles.warningText}>{warning}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-              )}
-
-              {/* Video Tutorial */}
-              {selectedRecipe.videoUrl && (
-                <TouchableOpacity style={styles.videoButton}>
-                  <Ionicons name="play-circle" size={24} color="#fff" />
-                  <Text style={styles.videoButtonText}>Video-Tutorial ansehen</Text>
-                </TouchableOpacity>
-              )}
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Allergien & Unverträglichkeiten</Text>
+              <TextInput
+                style={[styles.formInput, styles.formTextArea]}
+                value={(editedProfile?.allergies || profile.allergies || []).join(', ')}
+                onChangeText={(text) => {
+                  const allergies = text.split(',').map(a => a.trim()).filter(a => a);
+                  setEditedProfile({ ...profile, ...editedProfile, allergies });
+                }}
+                placeholder="z.B. Duftstoffe, Parabene, Nüsse"
+                multiline
+                numberOfLines={3}
+              />
             </View>
           </ScrollView>
         </View>
@@ -635,81 +689,373 @@ export function RecipesScreen() {
     );
   };
 
-  const renderFiltersModal = () => (
+  const renderSettingsModal = () => (
     <Modal
-      visible={showFilters}
+      visible={showSettings}
       animationType="slide"
-      transparent={true}
-      onRequestClose={() => setShowFilters(false)}
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowSettings(false)}
     >
-      <View style={styles.filterModalContainer}>
-        <View style={styles.filterModalContent}>
-          <View style={styles.filterModalHeader}>
-            <Text style={styles.filterModalTitle}>Filter & Sortierung</Text>
-            <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <Ionicons name="close" size={24} color="#333" />
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={() => setShowSettings(false)}>
+            <Ionicons name="close" size={28} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Einstellungen</Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {/* Benachrichtigungen */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Benachrichtigungen</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Push-Benachrichtigungen</Text>
+                <Text style={styles.settingDescription}>Alle App-Benachrichtigungen</Text>
+              </View>
+              <Switch
+                value={settings.notifications.enabled}
+                onValueChange={async (value) => {
+                  if (value) await handleNotificationPermission();
+                  const newSettings = {
+                    ...settings,
+                    notifications: { ...settings.notifications, enabled: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Tägliche Erinnerung</Text>
+                <Text style={styles.settingDescription}>Routine-Reminder um {settings.notifications.reminderTime}</Text>
+              </View>
+              <Switch
+                value={settings.notifications.dailyReminder}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    notifications: { ...settings.notifications, dailyReminder: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Produktempfehlungen</Text>
+                <Text style={styles.settingDescription}>Neue passende Produkte</Text>
+              </View>
+              <Switch
+                value={settings.notifications.productRecommendations}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    notifications: { ...settings.notifications, productRecommendations: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+
+          {/* Datenschutz */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Datenschutz & Sicherheit</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Biometrische Anmeldung</Text>
+                <Text style={styles.settingDescription}>Face ID / Touch ID verwenden</Text>
+              </View>
+              <Switch
+                value={settings.privacy.biometricAuth}
+                onValueChange={handleBiometricToggle}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+                disabled={!biometricAvailable}
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Anonyme Analytik</Text>
+                <Text style={styles.settingDescription}>Hilft uns die App zu verbessern</Text>
+              </View>
+              <Switch
+                value={settings.privacy.shareAnalytics}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    privacy: { ...settings.privacy, shareAnalytics: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Datenschutzerklärung</Text>
+              <Ionicons name="open-outline" size={16} color="#6b46c1" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Nutzungsbedingungen</Text>
+              <Ionicons name="open-outline" size={16} color="#6b46c1" />
             </TouchableOpacity>
           </View>
 
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Schwierigkeit</Text>
-            <View style={styles.filterOptions}>
-              {['all', 'easy', 'medium', 'hard'].map((level) => (
-                <TouchableOpacity
-                  key={level}
-                  style={[
-                    styles.filterOption,
-                    selectedDifficulty === level && styles.filterOptionActive
-                  ]}
-                  onPress={() => setSelectedDifficulty(level)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    selectedDifficulty === level && styles.filterOptionTextActive
-                  ]}>
-                    {level === 'all' ? 'Alle' :
-                     level === 'easy' ? 'Einfach' :
-                     level === 'medium' ? 'Mittel' : 'Schwer'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          {/* Erscheinungsbild */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Erscheinungsbild</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Dunkler Modus</Text>
+                <Text style={styles.settingDescription}>Augenschonend bei Nacht</Text>
+              </View>
+              <Switch
+                value={settings.appearance.darkMode}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    appearance: { ...settings.appearance, darkMode: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
             </View>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Sprache ändern</Text>
+              <View style={styles.settingValue}>
+                <Text style={styles.settingValueText}>Deutsch</Text>
+                <Ionicons name="chevron-forward" size={16} color="#999" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Schriftgröße</Text>
+              <View style={styles.settingValue}>
+                <Text style={styles.settingValueText}>
+                  {settings.appearance.fontSize === 'small' ? 'Klein' :
+                   settings.appearance.fontSize === 'large' ? 'Groß' : 'Mittel'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#999" />
+              </View>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Sortieren nach</Text>
-            <View style={styles.filterOptions}>
-              {[
-                { id: 'newest', label: 'Neueste' },
-                { id: 'popular', label: 'Beliebteste' },
-                { id: 'time', label: 'Schnellste' }
-              ].map((sort) => (
-                <TouchableOpacity
-                  key={sort.id}
-                  style={[
-                    styles.filterOption,
-                    sortBy === sort.id && styles.filterOptionActive
-                  ]}
-                  onPress={() => setSortBy(sort.id as any)}
-                >
-                  <Text style={[
-                    styles.filterOptionText,
-                    sortBy === sort.id && styles.filterOptionTextActive
-                  ]}>
-                    {sort.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+          {/* Daten & Backup */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Daten & Backup</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Automatisches Backup</Text>
+                <Text style={styles.settingDescription}>
+                  {settings.data.backupFrequency === 'daily' ? 'Täglich' :
+                   settings.data.backupFrequency === 'weekly' ? 'Wöchentlich' : 'Monatlich'}
+                </Text>
+              </View>
+              <Switch
+                value={settings.data.autoBackup}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    data: { ...settings.data, autoBackup: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
             </View>
+
+            <TouchableOpacity style={styles.settingButton} onPress={handleExportData}>
+              <Text style={styles.settingButtonText}>Daten exportieren</Text>
+              <Ionicons name="download-outline" size={16} color="#6b46c1" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Cache leeren</Text>
+              <Text style={styles.settingValueText}>124 MB</Text>
+            </TouchableOpacity>
           </View>
 
+          {/* Account */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Account</Text>
+            
+            <TouchableOpacity style={styles.settingButton} onPress={() => {
+              Alert.alert('Abmelden', 'Möchten Sie sich wirklich abmelden?', [
+                { text: 'Abbrechen', style: 'cancel' },
+                { text: 'Abmelden', onPress: logout }
+              ]);
+            }}>
+              <Text style={[styles.settingButtonText, { color: '#FF6B6B' }]}>Abmelden</Text>
+              <Ionicons name="log-out-outline" size={16} color="#FF6B6B" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.settingButton} 
+              onPress={() => setShowDeleteAccount(true)}
+            >
+              <Text style={[styles.settingButtonText, { color: '#FF3B30' }]}>
+                Account löschen
+              </Text>
+              <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ height: 50 }} />
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  const renderPremiumModal = () => (
+    <Modal
+      visible={showPremiumModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowPremiumModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <ScrollView showsVerticalScrollIndicator={false}>
           <TouchableOpacity
-            style={styles.applyFiltersButton}
-            onPress={() => setShowFilters(false)}
+            style={styles.premiumCloseButton}
+            onPress={() => setShowPremiumModal(false)}
           >
-            <Text style={styles.applyFiltersText}>Filter anwenden</Text>
+            <Ionicons name="close" size={28} color="#333" />
           </TouchableOpacity>
-        </View>
+
+          <LinearGradient
+            colors={['#FFD700', '#FFA500']}
+            style={styles.premiumHeader}
+          >
+            <Ionicons name="star" size={48} color="#fff" />
+            <Text style={styles.premiumHeaderTitle}>GlowMatch Premium</Text>
+            <Text style={styles.premiumHeaderSubtitle}>
+              Entdecken Sie Ihr volles Beauty-Potenzial
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.premiumContent}>
+            {/* Current Status */}
+            {premiumTier !== 'basic' && (
+              <View style={styles.currentPlanBox}>
+                <Text style={styles.currentPlanTitle}>Ihr aktueller Plan</Text>
+                <Text style={styles.currentPlanName}>
+                  {premiumTier === 'gold' ? 'Gold Membership' : 'Silver Premium'}
+                </Text>
+                <TouchableOpacity style={styles.managePlanButton}>
+                  <Text style={styles.managePlanText}>Abo verwalten</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Benefits */}
+            <View style={styles.benefitsSection}>
+              <Text style={styles.benefitsTitle}>Premium Vorteile</Text>
+              {[
+                { icon: 'infinite', text: 'Unbegrenzte KI-Analysen' },
+                { icon: 'book', text: 'Zugang zu allen DIY-Rezepten' },
+                { icon: 'person', text: 'Persönliche Beauty-Beratung' },
+                { icon: 'close-circle', text: 'Keine Werbung' },
+                { icon: 'rocket', text: 'Früher Zugang zu neuen Features' },
+                { icon: 'gift', text: 'Monatliche Überraschungen (Gold)' },
+              ].map((benefit, index) => (
+                <View key={index} style={styles.benefitItem}>
+                  <Ionicons name={benefit.icon as any} size={24} color="#6b46c1" />
+                  <Text style={styles.benefitText}>{benefit.text}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Plans */}
+            <View style={styles.plansSection}>
+              <Text style={styles.plansTitle}>Wählen Sie Ihren Plan</Text>
+              {premiumPlans.map((plan) => (
+                <TouchableOpacity
+                  key={plan.id}
+                  style={[styles.planCard, plan.popular && styles.planCardPopular]}
+                  onPress={() => handlePremiumPurchase(plan)}
+                  activeOpacity={0.9}
+                >
+                  {plan.popular && (
+                    <View style={styles.popularBadge}>
+                      <Text style={styles.popularBadgeText}>BELIEBT</Text>
+                    </View>
+                  )}
+                  
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  <View style={styles.planPriceContainer}>
+                    <Text style={styles.planPrice}>€{plan.price}</Text>
+                    <Text style={styles.planPeriod}>{plan.period}</Text>
+                  </View>
+                  
+                  {plan.savings && (
+                    <View style={styles.planSavings}>
+                      <Text style={styles.planSavingsText}>{plan.savings}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.planFeatures}>
+                    {plan.features.map((feature, index) => (
+                      <View key={index} style={styles.planFeature}>
+                        <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                        <Text style={styles.planFeatureText}>{feature}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={[styles.planButton, plan.popular && styles.planButtonPopular]}>
+                    <Text style={[styles.planButtonText, plan.popular && styles.planButtonTextPopular]}>
+                      Jetzt upgraden
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* FAQ */}
+            <View style={styles.faqSection}>
+              <Text style={styles.faqTitle}>Häufige Fragen</Text>
+              <TouchableOpacity style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>Kann ich jederzeit kündigen?</Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>Gibt es eine Testphase?</Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>Was ist im Gold-Paket enthalten?</Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Restore Purchase */}
+            <TouchableOpacity style={styles.restoreButton}>
+              <Text style={styles.restoreButtonText}>Käufe wiederherstellen</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -718,114 +1064,31 @@ export function RecipesScreen() {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6b46c1" />
-        <Text style={styles.loadingText}>Lade Rezepte...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <LinearGradient
-        colors={['#6b46c1', '#8b5cf6']}
-        style={styles.header}
-      >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-          <Text style={styles.headerTitle}>DIY Beauty Rezepte</Text>
-          <Text style={styles.headerSubtitle}>
-            {premiumTier === 'basic' 
-              ? `${filteredRecipes.filter(r => !r.isPremium).length} kostenlose Rezepte`
-              : `${filteredRecipes.length} Rezepte verfügbar`}
-          </Text>
-        </Animated.View>
-      </LinearGradient>
-
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#999" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Rezepte oder Zutaten suchen..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#999" />
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity
-          style={styles.filterButton}
-          onPress={() => setShowFilters(true)}
-        >
-          <Ionicons name="filter" size={24} color="#6b46c1" />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {renderHeader()}
+        {renderMenuSection()}
+        
+        <TouchableOpacity style={styles.logoutButton} onPress={() => {
+          Alert.alert('Abmelden', 'Möchten Sie sich wirklich abmelden?', [
+            { text: 'Abbrechen', style: 'cancel' },
+            { text: 'Abmelden', onPress: logout, style: 'destructive' }
+          ]);
+        }}>
+          <Text style={styles.logoutText}>Abmelden</Text>
         </TouchableOpacity>
-      </View>
 
-      {/* Categories */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesContainer}
-        contentContainerStyle={styles.categoriesContent}
-      >
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category.id}
-            style={[
-              styles.categoryChip,
-              selectedCategory === category.id && styles.categoryChipActive
-            ]}
-            onPress={() => {
-              setSelectedCategory(category.id);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            }}
-          >
-            <LinearGradient
-              colors={selectedCategory === category.id ? category.color : ['#f0f0f0', '#f0f0f0']}
-              style={styles.categoryGradient}
-            >
-              <Ionicons 
-                name={category.icon as any} 
-                size={20} 
-                color={selectedCategory === category.id ? '#fff' : '#666'} 
-              />
-              <Text style={[
-                styles.categoryText,
-                selectedCategory === category.id && styles.categoryTextActive
-              ]}>
-                {category.name}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        ))}
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Recipes List */}
-      <FlatList
-        data={filteredRecipes}
-        renderItem={renderRecipeCard}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.recipeRow}
-        contentContainerStyle={styles.recipesList}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="flask-outline" size={64} color="#ccc" />
-            <Text style={styles.emptyText}>Keine Rezepte gefunden</Text>
-            <Text style={styles.emptySubtext}>
-              Versuchen Sie eine andere Suche oder Kategorie
-            </Text>
-          </View>
-        }
-      />
-
-      {renderRecipeModal()}
-      {renderFiltersModal()}
+      {renderEditProfileModal()}
+      {renderSettingsModal()}
+      {renderPremiumModal()}
     </View>
   );
 }
@@ -840,300 +1103,372 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b46c1',
-  },
   header: {
     paddingTop: 60,
     paddingBottom: 30,
     paddingHorizontal: 20,
   },
-  headerTitle: {
-    fontSize: 32,
+  headerContent: {
+    alignItems: 'center',
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  editAvatarBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#6b46c1',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  profileInfo: {
+    marginLeft: 20,
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
-    marginBottom: 8,
   },
-  headerSubtitle: {
-    fontSize: 16,
+  profileEmail: {
+    fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    gap: 12,
-  },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    marginLeft: 8,
-    paddingVertical: 12,
-  },
-  filterButton: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  categoriesContainer: {
-    maxHeight: 60,
-  },
-  categoriesContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  categoryChip: {
-    marginRight: 12,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  categoryChipActive: {
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-  },
-  categoryGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-  },
-  categoryText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-  },
-  categoryTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  recipesList: {
-    paddingHorizontal: 20,
-    paddingBottom: 100,
-  },
-  recipeRow: {
-    justifyContent: 'space-between',
-  },
-  recipeCard: {
-    width: (width - 50) / 2,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-  },
-  recipeImageContainer: {
-    position: 'relative',
-    height: 150,
-  },
-  recipeImage: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#f0f0f0',
-  },
-  premiumOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  premiumText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
     marginTop: 4,
   },
-  favoriteButton: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    justifyContent: 'center',
+  premiumBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  difficultyBadge: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginTop: 8,
   },
-  difficultyText: {
+  premiumText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+    marginLeft: 4,
   },
-  recipeInfo: {
-    padding: 12,
-  },
-  recipeTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-    height: 40,
-  },
-  recipeDetails: {
+  statsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  detailText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  benefitsPreview: {
-    gap: 4,
-  },
-  benefitChip: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  benefitText: {
-    fontSize: 11,
-    color: '#4CAF50',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: 100,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#999',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-    marginTop: 8,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-  },
-  modalImageContainer: {
-    height: height * 0.4,
-    position: 'relative',
-  },
-  modalImage: {
+    justifyContent: 'space-around',
     width: '100%',
-    height: '100%',
-    backgroundColor: '#f0f0f0',
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.2)',
   },
-  modalImageGradient: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'space-between',
-    padding: 20,
-    paddingTop: 60,
+  statItem: {
+    alignItems: 'center',
   },
-  modalCloseButton: {
-    alignSelf: 'flex-end',
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
   },
-  blurButton: {
+  statLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
+  },
+  menuSection: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  menuItemLast: {
+    borderBottomWidth: 0,
+  },
+  menuIconContainer: {
     width: 40,
     height: 40,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
   },
-  modalHeader: {
-    marginBottom: 20,
+  menuContent: {
+    flex: 1,
+    marginLeft: 16,
   },
-  modalTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  actionButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    padding: 20,
-  },
-  quickInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-  },
-  infoBox: {
-    alignItems: 'center',
-  },
-  infoLabel: {
-    fontSize: 12,
-    color: '#999',
-    marginTop: 4,
-  },
-  infoValue: {
+  menuTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
+  },
+  menuSubtitle: {
+    fontSize: 13,
+    color: '#999',
     marginTop: 2,
   },
-  section: {
+  menuRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  newBadge: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+    marginRight: 8,
+  },
+  newBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  logoutButton: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  logoutText: {
+    color: '#FF3B30',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  modalCancel: {
+    fontSize: 16,
+    color: '#6b46c1',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalSave: {
+    fontSize: 16,
+    color: '#6b46c1',
+    fontWeight: '600',
+  },
+  modalContent: {
+    flex: 1,
+  },
+  avatarEditContainer: {
+    alignSelf: 'center',
+    marginVertical: 30,
+  },
+  avatarEdit: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  avatarEditOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarEditText: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  formSection: {
+    paddingHorizontal: 20,
     marginBottom: 24,
   },
-  sectionTitle: {
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#333',
+  },
+  formTextArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
+  },
+  chipActive: {
+    backgroundColor: '#6b46c1',
+    borderColor: '#6b46c1',
+  },
+  chipText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  chipTextActive: {
+    color: '#fff',
+  },
+  settingsSection: {
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  settingsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  settingTitle: {
+    fontSize: 16,
+    color: '#333',
+  },
+  settingDescription: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 2,
+  },
+  settingButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  settingButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  settingValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingValueText: {
+    fontSize: 14,
+    color: '#999',
+    marginRight: 8,
+  },
+  premiumCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+  },
+  premiumHeader: {
+    alignItems: 'center',
+    paddingTop: 100,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+  },
+  premiumHeaderTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 16,
+  },
+  premiumHeaderSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  premiumContent: {
+    padding: 20,
+  },
+  currentPlanBox: {
+    backgroundColor: '#E8F5E9',
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  currentPlanTitle: {
+    fontSize: 14,
+    color: '#4CAF50',
+  },
+  currentPlanName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 4,
+  },
+  managePlanButton: {
+    marginTop: 12,
+  },
+  managePlanText: {
+    fontSize: 14,
+    color: '#4CAF50',
+    textDecorationLine: 'underline',
+  },
+  benefitsSection: {
+    marginBottom: 32,
+  },
+  benefitsTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#333',
@@ -1144,167 +1479,141 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  benefitItemText: {
+  benefitText: {
     fontSize: 16,
     color: '#333',
     marginLeft: 12,
-    flex: 1,
   },
-  ingredientItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    paddingLeft: 8,
+  plansSection: {
+    marginBottom: 32,
   },
-  ingredientBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#6b46c1',
-    marginRight: 12,
-  },
-  ingredientText: {
-    fontSize: 16,
+  plansTitle: {
+    fontSize: 20,
+    fontWeight: '600',
     color: '#333',
-  },
-  instructionItem: {
-    flexDirection: 'row',
     marginBottom: 16,
   },
-  instructionNumber: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#6b46c1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  instructionNumberText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  instructionText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-  },
-  tipsContainer: {
-    backgroundColor: '#FFF9E6',
-    borderRadius: 12,
-    padding: 16,
-  },
-  tipItem: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  tipText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-    flex: 1,
-  },
-  warningsContainer: {
-    backgroundColor: '#FFEBEE',
-    borderRadius: 12,
-    padding: 16,
-  },
-  warningItem: {
-    flexDirection: 'row',
-    marginBottom: 8,
-  },
-  warningText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-    flex: 1,
-  },
-  videoButton: {
-    backgroundColor: '#6b46c1',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 24,
-    gap: 8,
-  },
-  videoButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  filterModalContainer: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  filterModalContent: {
+  planCard: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    position: 'relative',
   },
-  filterModalHeader: {
+  planCardPopular: {
+    borderColor: '#6b46c1',
+  },
+  popularBadge: {
+    position: 'absolute',
+    top: -12,
+    right: 20,
+    backgroundColor: '#6b46c1',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  popularBadgeText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  planName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  planPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 12,
+  },
+  planPrice: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#6b46c1',
+  },
+  planPeriod: {
+    fontSize: 16,
+    color: '#999',
+    marginLeft: 8,
+  },
+  planSavings: {
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  planSavingsText: {
+    fontSize: 14,
+    color: '#FF8C00',
+    fontWeight: '600',
+  },
+  planFeatures: {
+    marginBottom: 20,
+  },
+  planFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  planFeatureText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  planButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  planButtonPopular: {
+    backgroundColor: '#6b46c1',
+  },
+  planButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  planButtonTextPopular: {
+    color: '#fff',
+  },
+  faqSection: {
+    marginBottom: 24,
+  },
+  faqTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  faqItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
-  },
-  filterModalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  filterSection: {
-    marginBottom: 24,
-  },
-  filterSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 12,
-  },
-  filterOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  filterOption: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
-  },
-  filterOptionActive: {
-    backgroundColor: '#6b46c1',
-    borderColor: '#6b46c1',
-  },
-  filterOptionText: {
-    fontSize: 14,
-    color: '#666',
-  },
-  filterOptionTextActive: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  applyFiltersButton: {
-    backgroundColor: '#6b46c1',
     paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  applyFiltersText: {
-    color: '#fff',
+  faqQuestion: {
     fontSize: 16,
-    fontWeight: '600',
+    color: '#333',
+    flex: 1,
+  },
+  restoreButton: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  restoreButtonText: {
+    fontSize: 14,
+    color: '#6b46c1',
+    textDecorationLine: 'underline',
   },
 });
 
-export default RecipesScreen;
+export default ProfileScreen;
