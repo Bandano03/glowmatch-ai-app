@@ -29,7 +29,7 @@ export class OpenAIService {
             'Authorization': `Bearer ${this.apiKey}`
           },
           body: JSON.stringify({
-            model: 'gpt-4-vision-preview',
+            model: 'gpt-4o-mini', // AKTUALISIERTES MODEL!
             messages: messages,
             max_tokens: maxTokens,
             temperature: 0.3, // Niedrig für konsistente Ergebnisse
@@ -56,6 +56,7 @@ export class OpenAIService {
 
       } catch (error) {
         lastError = error as Error;
+        console.error(`API Versuch ${attempt + 1} fehlgeschlagen:`, error);
         
         // Nicht erneut versuchen bei bestimmten Fehlern
         if (error.message.includes('API Key ungültig') || 
@@ -224,7 +225,7 @@ Antworte im folgenden JSON-Format:
     }
   }
 
-  // Validierungsfunktionen
+  // Validierungsfunktionen bleiben gleich...
   private static validateSkinAnalysis(result: SkinAnalysisResult): void {
     const requiredFields = [
       'skinType', 'hydration', 'oiliness', 'sensitivity', 
