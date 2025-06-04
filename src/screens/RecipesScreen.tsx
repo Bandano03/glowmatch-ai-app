@@ -1,443 +1,832 @@
-import React, { useState, useContext } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  StatusBar,
+import React, { useState, useEffect, useContext, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
   TextInput,
   Modal,
-  Alert
+  FlatList,
+  Dimensions,
+  Alert,
+  ActivityIndicator,
+  Animated,
+  Share,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import * as Haptics from 'expo-haptics';
 import { UserContext } from '../../App';
-import { Recipe } from '../types/premium';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const { width, height } = Dimensions.get('window');
+
+interface Recipe {
+  id: string;
+  title: string;
+  category: 'face' | 'hair' | 'body' | 'lips';
+  difficulty: 'easy' | 'medium' | 'hard';
+  time: number; // in minutes
+  ingredients: string[];
+  instructions: string[];
+  benefits: string[];
+  image: string;
+  isPremium: boolean;
+  rating: number;
+  reviews: number;
+  isFavorite: boolean;
+  videoUrl?: string;
+  tips?: string[];
+  warnings?: string[];
+}
+
+interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  color: string[];
+}
 
 export function RecipesScreen() {
-  const { premiumTier, purchasedRecipes, addPurchasedRecipe } = useContext(UserContext);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const { user, premiumTier, purchasedRecipes, addPurchasedRecipe } = useContext(UserContext);
+  
+  // States
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [showFilters, setShowFilters] = useState(false);
+  const [selectedDifficulty, setSelectedDifficulty] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<'newest' | 'popular' | 'time'>('newest');
 
-  // Mock Rezepte - in echter App aus Datenbank laden
-  const recipes: Recipe[] = [
-    {
-      id: '1',
-      title: 'Honig-Olivenöl Haarmaske',
-      description: 'Natürliche Tiefenpflege für trockenes Haar',
-      skinTypes: [],
-      hairTypes: ['trocken', 'normal'],
-      ingredients: {
-        'honey': '2 EL Bio-Honig',
-        'olive_oil': '3 EL Olivenöl',
-        'egg': '1 Eigelb (optional)'
-      },
-      instructions: [
-        'Honig und Olivenöl in einer Schüssel vermischen',
-        'Optional Eigelb hinzufügen für extra Pflege',
-        'Auf das feuchte Haar auftragen',
-        '30 Minuten einwirken lassen',
-        'Mit lauwarmem Wasser gründlich ausspülen'
-      ],
-      prepTime: 35,
-      difficulty: 'einfach',
-      price: 0,
-      isFree: true,
-      freeForPremium: [],
-      category: 'haarpflege',
-      benefits: ['Feuchtigkeit', 'Glanz', 'Geschmeidigkeit'],
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: '2',
-      title: 'Avocado-Aloe Gesichtsmaske',
-      description: 'Beruhigende Maske für empfindliche Haut',
-      skinTypes: ['trocken', 'sensibel'],
-      hairTypes: [],
-      ingredients: {
-        'avocado': '1/2 reife Avocado',
-        'aloe': '2 EL Aloe Vera Gel',
-        'honey': '1 TL Honig'
-      },
-      instructions: [
-        'Avocado mit einer Gabel zerdrücken',
-        'Aloe Vera Gel und Honig unterrühren',
-        'Auf das gereinigte Gesicht auftragen',
-        '15 Minuten einwirken lassen',
-        'Mit warmem Wasser abwaschen'
-      ],
-      prepTime: 20,
-      difficulty: 'einfach',
-      price: 2.00,
-      isFree: false,
-      freeForPremium: ['silver', 'gold'],
-      category: 'hautpflege',
-      benefits: ['Beruhigung', 'Feuchtigkeit', 'Anti-Aging'],
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: '3',
-      title: 'Kaffee-Kokos Körperpeeling',
-      description: 'Belebendes Peeling für seidig-glatte Haut',
-      skinTypes: ['alle'],
-      hairTypes: [],
-      ingredients: {
-        'coffee': '4 EL gemahlener Kaffee',
-        'coconut_oil': '3 EL Kokosöl',
-        'sugar': '2 EL brauner Zucker',
-        'vanilla': '1 TL Vanilleextrakt'
-      },
-      instructions: [
-        'Kokosöl leicht erwärmen bis es flüssig ist',
-        'Kaffee, Zucker und Vanille hinzufügen',
-        'Gut vermischen bis eine Paste entsteht',
-        'Unter der Dusche auf die feuchte Haut auftragen',
-        'In kreisenden Bewegungen einmassieren',
-        'Mit warmem Wasser abspülen'
-      ],
-      prepTime: 10,
-      difficulty: 'einfach',
-      price: 3.50,
-      isFree: false,
-      freeForPremium: ['gold'],
-      category: 'körperpflege',
-      benefits: ['Peeling', 'Durchblutung', 'Cellulite-Reduktion'],
-      createdAt: new Date().toISOString()
-    },
-    {
-      id: '4',
-      title: 'Rosenwasser-Toner',
-      description: 'Erfrischender Toner für alle Hauttypen',
-      skinTypes: ['alle'],
-      hairTypes: [],
-      ingredients: {
-        'rose_petals': '1 Tasse frische Rosenblätter',
-        'water': '2 Tassen destilliertes Wasser',
-        'witch_hazel': '2 EL Hamamelis (optional)'
-      },
-      instructions: [
-        'Wasser zum Kochen bringen',
-        'Rosenblätter in eine hitzebeständige Schüssel geben',
-        'Heißes Wasser über die Blätter gießen',
-        '30 Minuten ziehen lassen',
-        'Durch ein feines Sieb abseihen',
-        'Optional Hamamelis hinzufügen',
-        'In eine Sprühflasche füllen'
-      ],
-      prepTime: 40,
-      difficulty: 'mittel',
-      price: 4.00,
-      isFree: false,
-      freeForPremium: ['silver', 'gold'],
-      category: 'hautpflege',
-      benefits: ['pH-Balance', 'Erfrischung', 'Porenverfeinerung'],
-      createdAt: new Date().toISOString()
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
+  useEffect(() => {
+    loadData();
+    startAnimations();
+  }, []);
+
+  useEffect(() => {
+    filterRecipes();
+  }, [selectedCategory, searchQuery, recipes, selectedDifficulty, sortBy]);
+
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Load categories
+      const categoriesData: Category[] = [
+        { id: 'all', name: 'Alle', icon: 'apps', color: ['#6b46c1', '#8b5cf6'] },
+        { id: 'face', name: 'Gesicht', icon: 'happy', color: ['#4ECDC4', '#44A08D'] },
+        { id: 'hair', name: 'Haare', icon: 'cut', color: ['#FFB923', '#FF6B6B'] },
+        { id: 'body', name: 'Körper', icon: 'body', color: ['#A8E6CF', '#7FD8BE'] },
+        { id: 'lips', name: 'Lippen', icon: 'heart', color: ['#FF6B9D', '#FEC8D8'] },
+      ];
+      setCategories(categoriesData);
+
+      // Load recipes
+      const recipesData: Recipe[] = [
+        {
+          id: '1',
+          title: 'Avocado Honig Gesichtsmaske',
+          category: 'face',
+          difficulty: 'easy',
+          time: 15,
+          ingredients: [
+            '1/2 reife Avocado',
+            '1 EL Bio-Honig',
+            '1 TL Joghurt',
+            '2 Tropfen Vitamin E Öl (optional)'
+          ],
+          instructions: [
+            'Avocado in einer Schüssel zerdrücken bis eine cremige Masse entsteht',
+            'Honig und Joghurt hinzufügen und gut vermischen',
+            'Optional: Vitamin E Öl für extra Pflege hinzufügen',
+            'Gesicht reinigen und die Maske gleichmäßig auftragen',
+            '15-20 Minuten einwirken lassen',
+            'Mit lauwarmem Wasser abspülen und Gesicht trocken tupfen',
+            'Anschließend Ihre normale Feuchtigkeitscreme auftragen'
+          ],
+          benefits: [
+            'Intensive Feuchtigkeitspflege',
+            'Reich an Vitaminen A, D und E',
+            'Beruhigt gereizte Haut',
+            'Verbessert die Hautelastizität',
+            'Natürliche Anti-Aging Wirkung'
+          ],
+          image: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273',
+          isPremium: false,
+          rating: 4.8,
+          reviews: 234,
+          isFavorite: false,
+          tips: [
+            'Verwenden Sie nur reife Avocados für beste Ergebnisse',
+            'Testen Sie die Maske erst an einer kleinen Hautstelle',
+            'Ideal für trockene und normale Hauttypen'
+          ],
+          warnings: [
+            'Nicht bei Avocado-Allergie verwenden',
+            'Vermeiden Sie die Augenpartie'
+          ]
+        },
+        {
+          id: '2',
+          title: 'Kokosöl Haarmaske',
+          category: 'hair',
+          difficulty: 'easy',
+          time: 30,
+          ingredients: [
+            '3 EL Kokosöl',
+            '1 EL Honig',
+            '1 Ei (optional für extra Protein)',
+            '5 Tropfen Rosmarinöl'
+          ],
+          instructions: [
+            'Kokosöl bei Bedarf leicht erwärmen bis es flüssig ist',
+            'Honig und optional das Ei hinzufügen',
+            'Rosmarinöl für bessere Durchblutung einrühren',
+            'Haare anfeuchten und die Maske vom Ansatz bis in die Spitzen einmassieren',
+            '30-45 Minuten einwirken lassen (mit Handtuch umwickeln)',
+            'Gründlich mit Shampoo auswaschen (evtl. 2x shampoonieren)'
+          ],
+          benefits: [
+            'Tiefenwirksame Pflege',
+            'Repariert geschädigtes Haar',
+            'Verleiht Glanz und Geschmeidigkeit',
+            'Fördert das Haarwachstum',
+            'Reduziert Spliss'
+          ],
+          image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc',
+          isPremium: false,
+          rating: 4.9,
+          reviews: 456,
+          isFavorite: false,
+          videoUrl: 'https://example.com/hair-mask-tutorial'
+        },
+        {
+          id: '3',
+          title: 'Kaffee-Peeling für strahlende Haut',
+          category: 'body',
+          difficulty: 'easy',
+          time: 10,
+          ingredients: [
+            '1/2 Tasse Kaffeesatz',
+            '1/4 Tasse Kokosöl',
+            '1/4 Tasse brauner Zucker',
+            '1 TL Vanilleextrakt'
+          ],
+          instructions: [
+            'Alle Zutaten in einer Schüssel vermischen',
+            'Unter der Dusche auf die feuchte Haut auftragen',
+            'In kreisenden Bewegungen einmassieren',
+            '5-10 Minuten einwirken lassen',
+            'Mit warmem Wasser abspülen'
+          ],
+          benefits: [
+            'Entfernt abgestorbene Hautzellen',
+            'Regt die Durchblutung an',
+            'Kann Cellulite mindern',
+            'Macht die Haut weich und glatt'
+          ],
+          image: 'https://images.unsplash.com/photo-1570554520913-ce3192c34509',
+          isPremium: true,
+          rating: 4.7,
+          reviews: 189,
+          isFavorite: false
+        },
+        {
+          id: '4',
+          title: 'Grüntee Toner',
+          category: 'face',
+          difficulty: 'easy',
+          time: 20,
+          ingredients: [
+            '1 Tasse grüner Tee (stark gebrüht)',
+            '2 EL Apfelessig',
+            '5 Tropfen Teebaumöl',
+            '1 EL Aloe Vera Gel'
+          ],
+          instructions: [
+            'Grünen Tee aufbrühen und vollständig abkühlen lassen',
+            'Apfelessig und Aloe Vera Gel hinzufügen',
+            'Teebaumöl einrühren',
+            'In eine saubere Sprühflasche füllen',
+            'Nach der Reinigung auf das Gesicht sprühen oder mit Wattepad auftragen'
+          ],
+          benefits: [
+            'Verfeinert die Poren',
+            'Wirkt entzündungshemmend',
+            'Reguliert die Talgproduktion',
+            'Reich an Antioxidantien'
+          ],
+          image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883',
+          isPremium: true,
+          rating: 4.6,
+          reviews: 98,
+          isFavorite: false
+        },
+        {
+          id: '5',
+          title: 'Honig-Zimt Lippenpeeling',
+          category: 'lips',
+          difficulty: 'easy',
+          time: 5,
+          ingredients: [
+            '1 TL Honig',
+            '1 TL brauner Zucker',
+            '1/2 TL Zimt',
+            '1/2 TL Kokosöl'
+          ],
+          instructions: [
+            'Alle Zutaten vermischen',
+            'Sanft auf die Lippen auftragen',
+            '1-2 Minuten massieren',
+            'Mit warmem Wasser abspülen',
+            'Lippenbalsam auftragen'
+          ],
+          benefits: [
+            'Entfernt trockene Hautschüppchen',
+            'Macht die Lippen weich',
+            'Regt die Durchblutung an',
+            'Natürliches Volumen'
+          ],
+          image: 'https://images.unsplash.com/photo-1583248369069-9d91f1640fe6',
+          isPremium: false,
+          rating: 4.9,
+          reviews: 321,
+          isFavorite: false
+        }
+      ];
+      setRecipes(recipesData);
+
+      // Load favorites
+      const savedFavorites = await AsyncStorage.getItem('favoriteRecipes');
+      if (savedFavorites) {
+        setFavorites(JSON.parse(savedFavorites));
+      }
+    } catch (error) {
+      console.error('Error loading recipes:', error);
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
 
-  const categories = [
-    { id: 'all', name: 'Alle', icon: 'apps' },
-    { id: 'hautpflege', name: 'Hautpflege', icon: 'water' },
-    { id: 'haarpflege', name: 'Haarpflege', icon: 'cut' },
-    { id: 'körperpflege', name: 'Körperpflege', icon: 'body' }
-  ];
+  const filterRecipes = () => {
+    let filtered = [...recipes];
 
-  const filteredRecipes = recipes.filter(recipe => {
-    const matchesCategory = selectedCategory === 'all' || recipe.category === selectedCategory;
-    const matchesSearch = recipe.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         recipe.description.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+    // Category filter
+    if (selectedCategory !== 'all') {
+      filtered = filtered.filter(r => r.category === selectedCategory);
+    }
 
-  const canAccessRecipe = (recipe: Recipe) => {
-    if (recipe.isFree) return true;
+    // Search filter
+    if (searchQuery) {
+      filtered = filtered.filter(r => 
+        r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.ingredients.some(i => i.toLowerCase().includes(searchQuery.toLowerCase()))
+      );
+    }
+
+    // Difficulty filter
+    if (selectedDifficulty !== 'all') {
+      filtered = filtered.filter(r => r.difficulty === selectedDifficulty);
+    }
+
+    // Sorting
+    switch (sortBy) {
+      case 'popular':
+        filtered.sort((a, b) => b.rating - a.rating);
+        break;
+      case 'time':
+        filtered.sort((a, b) => a.time - b.time);
+        break;
+      case 'newest':
+      default:
+        // Keep original order
+        break;
+    }
+
+    setFilteredRecipes(filtered);
+  };
+
+  const toggleFavorite = async (recipeId: string) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    const newFavorites = favorites.includes(recipeId)
+      ? favorites.filter(id => id !== recipeId)
+      : [...favorites, recipeId];
+    
+    setFavorites(newFavorites);
+    await AsyncStorage.setItem('favoriteRecipes', JSON.stringify(newFavorites));
+    
+    setRecipes(prev => prev.map(recipe => 
+      recipe.id === recipeId 
+        ? { ...recipe, isFavorite: !recipe.isFavorite }
+        : recipe
+    ));
+  };
+
+  const canAccessRecipe = (recipe: Recipe): boolean => {
+    if (!recipe.isPremium) return true;
+    if (premiumTier !== 'basic') return true;
     if (purchasedRecipes.includes(recipe.id)) return true;
-    if (recipe.freeForPremium.includes(premiumTier)) return true;
     return false;
   };
 
-  const handleRecipePress = (recipe: Recipe) => {
-    if (canAccessRecipe(recipe)) {
-      setSelectedRecipe(recipe);
-      setShowRecipeModal(true);
-    } else {
+  const handleRecipePress = async (recipe: Recipe) => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    if (!canAccessRecipe(recipe)) {
       Alert.alert(
-        'Premium-Rezept',
-        `Dieses Rezept kostet CHF ${recipe.price.toFixed(2)}. Möchtest du es kaufen?`,
+        'Premium Rezept',
+        'Dieses Rezept ist nur für Premium-Mitglieder verfügbar. Möchten Sie es für 0,99€ einzeln kaufen oder Premium werden?',
         [
           { text: 'Abbrechen', style: 'cancel' },
           { 
-            text: 'Kaufen', 
-            onPress: () => {
-              // Hier würde Stripe Payment erfolgen
-              Alert.alert('Erfolg!', 'Rezept wurde gekauft! (Demo)');
-              addPurchasedRecipe(recipe.id);
-            }
+            text: 'Einzeln kaufen (0,99€)', 
+            onPress: () => handleSinglePurchase(recipe)
+          },
+          { 
+            text: 'Premium werden', 
+            onPress: () => console.log('Navigate to premium')
           }
         ]
       );
+      return;
+    }
+    
+    setSelectedRecipe(recipe);
+    setShowRecipeModal(true);
+  };
+
+  const handleSinglePurchase = async (recipe: Recipe) => {
+    // Hier würde die echte Kaufabwicklung stattfinden
+    Alert.alert('Kauf erfolgreich!', `Sie haben "${recipe.title}" erfolgreich gekauft.`);
+    addPurchasedRecipe(recipe.id);
+  };
+
+  const shareRecipe = async (recipe: Recipe) => {
+    try {
+      await Share.share({
+        message: `Schau dir dieses tolle DIY Beauty-Rezept an: ${recipe.title}\n\nZutaten:\n${recipe.ingredients.join('\n')}\n\nFinde mehr Rezepte in der GlowMatch App!`,
+        title: recipe.title,
+      });
+    } catch (error) {
+      console.error('Share error:', error);
     }
   };
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case 'einfach': return '#10b981';
-      case 'mittel': return '#f59e0b';
-      case 'schwer': return '#ef4444';
-      default: return '#6b7280';
+      case 'easy': return '#4CAF50';
+      case 'medium': return '#FFB923';
+      case 'hard': return '#FF6B6B';
+      default: return '#999';
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>DIY Beauty-Rezepte</Text>
-        <Text style={styles.headerSubtitle}>Natürliche Pflege zum Selbermachen</Text>
-        
-        {premiumTier !== 'basic' && (
-          <View style={styles.premiumBanner}>
+  const renderRecipeCard = ({ item }: { item: Recipe }) => {
+    const isAccessible = canAccessRecipe(item);
+    const isFavorite = favorites.includes(item.id);
+
+    return (
+      <TouchableOpacity
+        style={styles.recipeCard}
+        onPress={() => handleRecipePress(item)}
+        activeOpacity={0.9}
+      >
+        <View style={styles.recipeImageContainer}>
+          <Image 
+            source={{ uri: item.image }} 
+            style={styles.recipeImage}
+            defaultSource={require('../../assets/placeholder.png')}
+          />
+          {!isAccessible && (
+            <View style={styles.premiumOverlay}>
+              <Ionicons name="lock-closed" size={32} color="#fff" />
+              <Text style={styles.premiumText}>Premium</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={styles.favoriteButton}
+            onPress={() => toggleFavorite(item.id)}
+          >
             <Ionicons 
-              name={premiumTier === 'gold' ? 'crown' : 'star'} 
-              size={16} 
-              color={premiumTier === 'gold' ? '#fbbf24' : '#9ca3af'} 
+              name={isFavorite ? "heart" : "heart-outline"} 
+              size={24} 
+              color={isFavorite ? "#FF6B6B" : "#fff"} 
             />
-            <Text style={styles.premiumBannerText}>
-              Als {premiumTier === 'gold' ? 'Gold' : 'Silber'}-Mitglied hast du Zugriff auf alle Premium-Rezepte!
+          </TouchableOpacity>
+          <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(item.difficulty) }]}>
+            <Text style={styles.difficultyText}>
+              {item.difficulty === 'easy' ? 'Einfach' : 
+               item.difficulty === 'medium' ? 'Mittel' : 'Schwer'}
             </Text>
           </View>
-        )}
+        </View>
+        
+        <View style={styles.recipeInfo}>
+          <Text style={styles.recipeTitle} numberOfLines={2}>{item.title}</Text>
+          
+          <View style={styles.recipeDetails}>
+            <View style={styles.detailItem}>
+              <Ionicons name="time-outline" size={16} color="#666" />
+              <Text style={styles.detailText}>{item.time} Min</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Ionicons name="star" size={16} color="#FFD700" />
+              <Text style={styles.detailText}>{item.rating}</Text>
+            </View>
+            <View style={styles.detailItem}>
+              <Ionicons name="chatbubble-outline" size={16} color="#666" />
+              <Text style={styles.detailText}>{item.reviews}</Text>
+            </View>
+          </View>
+          
+          <View style={styles.benefitsPreview}>
+            {item.benefits.slice(0, 2).map((benefit, index) => (
+              <View key={index} style={styles.benefitChip}>
+                <Text style={styles.benefitText} numberOfLines={1}>{benefit}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderRecipeModal = () => {
+    if (!selectedRecipe) return null;
+
+    return (
+      <Modal
+        visible={showRecipeModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowRecipeModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Header Image */}
+            <View style={styles.modalImageContainer}>
+              <Image 
+                source={{ uri: selectedRecipe.image }} 
+                style={styles.modalImage}
+              />
+              <LinearGradient
+                colors={['transparent', 'rgba(0,0,0,0.8)']}
+                style={styles.modalImageGradient}
+              >
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setShowRecipeModal(false)}
+                >
+                  <BlurView intensity={80} style={styles.blurButton}>
+                    <Ionicons name="close" size={24} color="#fff" />
+                  </BlurView>
+                </TouchableOpacity>
+                
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{selectedRecipe.title}</Text>
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => toggleFavorite(selectedRecipe.id)}
+                    >
+                      <Ionicons 
+                        name={favorites.includes(selectedRecipe.id) ? "heart" : "heart-outline"} 
+                        size={24} 
+                        color="#fff" 
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => shareRecipe(selectedRecipe)}
+                    >
+                      <Ionicons name="share-outline" size={24} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </LinearGradient>
+            </View>
+
+            <View style={styles.modalContent}>
+              {/* Quick Info */}
+              <View style={styles.quickInfo}>
+                <View style={styles.infoBox}>
+                  <Ionicons name="time" size={24} color="#6b46c1" />
+                  <Text style={styles.infoLabel}>Zeit</Text>
+                  <Text style={styles.infoValue}>{selectedRecipe.time} Min</Text>
+                </View>
+                <View style={styles.infoBox}>
+                  <Ionicons name="speedometer" size={24} color="#FFB923" />
+                  <Text style={styles.infoLabel}>Schwierigkeit</Text>
+                  <Text style={styles.infoValue}>
+                    {selectedRecipe.difficulty === 'easy' ? 'Einfach' : 
+                     selectedRecipe.difficulty === 'medium' ? 'Mittel' : 'Schwer'}
+                  </Text>
+                </View>
+                <View style={styles.infoBox}>
+                  <Ionicons name="star" size={24} color="#FFD700" />
+                  <Text style={styles.infoLabel}>Bewertung</Text>
+                  <Text style={styles.infoValue}>{selectedRecipe.rating}/5</Text>
+                </View>
+              </View>
+
+              {/* Benefits */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Vorteile</Text>
+                {selectedRecipe.benefits.map((benefit, index) => (
+                  <View key={index} style={styles.benefitItem}>
+                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Text style={styles.benefitItemText}>{benefit}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Ingredients */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Zutaten</Text>
+                {selectedRecipe.ingredients.map((ingredient, index) => (
+                  <View key={index} style={styles.ingredientItem}>
+                    <View style={styles.ingredientBullet} />
+                    <Text style={styles.ingredientText}>{ingredient}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Instructions */}
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Anleitung</Text>
+                {selectedRecipe.instructions.map((instruction, index) => (
+                  <View key={index} style={styles.instructionItem}>
+                    <View style={styles.instructionNumber}>
+                      <Text style={styles.instructionNumberText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.instructionText}>{instruction}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Tips */}
+              {selectedRecipe.tips && selectedRecipe.tips.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Tipps</Text>
+                  <View style={styles.tipsContainer}>
+                    {selectedRecipe.tips.map((tip, index) => (
+                      <View key={index} style={styles.tipItem}>
+                        <Ionicons name="bulb" size={16} color="#FFB923" />
+                        <Text style={styles.tipText}>{tip}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Warnings */}
+              {selectedRecipe.warnings && selectedRecipe.warnings.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Hinweise</Text>
+                  <View style={styles.warningsContainer}>
+                    {selectedRecipe.warnings.map((warning, index) => (
+                      <View key={index} style={styles.warningItem}>
+                        <Ionicons name="warning" size={16} color="#FF6B6B" />
+                        <Text style={styles.warningText}>{warning}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {/* Video Tutorial */}
+              {selectedRecipe.videoUrl && (
+                <TouchableOpacity style={styles.videoButton}>
+                  <Ionicons name="play-circle" size={24} color="#fff" />
+                  <Text style={styles.videoButtonText}>Video-Tutorial ansehen</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+    );
+  };
+
+  const renderFiltersModal = () => (
+    <Modal
+      visible={showFilters}
+      animationType="slide"
+      transparent={true}
+      onRequestClose={() => setShowFilters(false)}
+    >
+      <View style={styles.filterModalContainer}>
+        <View style={styles.filterModalContent}>
+          <View style={styles.filterModalHeader}>
+            <Text style={styles.filterModalTitle}>Filter & Sortierung</Text>
+            <TouchableOpacity onPress={() => setShowFilters(false)}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>Schwierigkeit</Text>
+            <View style={styles.filterOptions}>
+              {['all', 'easy', 'medium', 'hard'].map((level) => (
+                <TouchableOpacity
+                  key={level}
+                  style={[
+                    styles.filterOption,
+                    selectedDifficulty === level && styles.filterOptionActive
+                  ]}
+                  onPress={() => setSelectedDifficulty(level)}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    selectedDifficulty === level && styles.filterOptionTextActive
+                  ]}>
+                    {level === 'all' ? 'Alle' :
+                     level === 'easy' ? 'Einfach' :
+                     level === 'medium' ? 'Mittel' : 'Schwer'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={styles.filterSection}>
+            <Text style={styles.filterSectionTitle}>Sortieren nach</Text>
+            <View style={styles.filterOptions}>
+              {[
+                { id: 'newest', label: 'Neueste' },
+                { id: 'popular', label: 'Beliebteste' },
+                { id: 'time', label: 'Schnellste' }
+              ].map((sort) => (
+                <TouchableOpacity
+                  key={sort.id}
+                  style={[
+                    styles.filterOption,
+                    sortBy === sort.id && styles.filterOptionActive
+                  ]}
+                  onPress={() => setSortBy(sort.id as any)}
+                >
+                  <Text style={[
+                    styles.filterOptionText,
+                    sortBy === sort.id && styles.filterOptionTextActive
+                  ]}>
+                    {sort.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.applyFiltersButton}
+            onPress={() => setShowFilters(false)}
+          >
+            <Text style={styles.applyFiltersText}>Filter anwenden</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+    </Modal>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6b46c1" />
+        <Text style={styles.loadingText}>Lade Rezepte...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <LinearGradient
+        colors={['#6b46c1', '#8b5cf6']}
+        style={styles.header}
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          <Text style={styles.headerTitle}>DIY Beauty Rezepte</Text>
+          <Text style={styles.headerSubtitle}>
+            {premiumTier === 'basic' 
+              ? `${filteredRecipes.filter(r => !r.isPremium).length} kostenlose Rezepte`
+              : `${filteredRecipes.length} Rezepte verfügbar`}
+          </Text>
+        </Animated.View>
+      </LinearGradient>
 
       {/* Search Bar */}
-      <View style={styles.searchSection}>
+      <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#6b7280" />
+          <Ionicons name="search" size={20} color="#999" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Rezepte suchen..."
+            placeholder="Rezepte oder Zutaten suchen..."
             value={searchQuery}
             onChangeText={setSearchQuery}
+            placeholderTextColor="#999"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#6b7280" />
+              <Ionicons name="close-circle" size={20} color="#999" />
             </TouchableOpacity>
           )}
         </View>
+        <TouchableOpacity
+          style={styles.filterButton}
+          onPress={() => setShowFilters(true)}
+        >
+          <Ionicons name="filter" size={24} color="#6b46c1" />
+        </TouchableOpacity>
       </View>
 
       {/* Categories */}
-      <ScrollView 
-        horizontal 
+      <ScrollView
+        horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.categoriesContainer}
+        contentContainerStyle={styles.categoriesContent}
       >
-        {categories.map(category => (
+        {categories.map((category) => (
           <TouchableOpacity
             key={category.id}
             style={[
               styles.categoryChip,
               selectedCategory === category.id && styles.categoryChipActive
             ]}
-            onPress={() => setSelectedCategory(category.id)}
+            onPress={() => {
+              setSelectedCategory(category.id);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }}
           >
-            <Ionicons 
-              name={category.icon} 
-              size={16} 
-              color={selectedCategory === category.id ? 'white' : '#6b7280'} 
-            />
-            <Text style={[
-              styles.categoryChipText,
-              selectedCategory === category.id && styles.categoryChipTextActive
-            ]}>
-              {category.name}
-            </Text>
+            <LinearGradient
+              colors={selectedCategory === category.id ? category.color : ['#f0f0f0', '#f0f0f0']}
+              style={styles.categoryGradient}
+            >
+              <Ionicons 
+                name={category.icon as any} 
+                size={20} 
+                color={selectedCategory === category.id ? '#fff' : '#666'} 
+              />
+              <Text style={[
+                styles.categoryText,
+                selectedCategory === category.id && styles.categoryTextActive
+              ]}>
+                {category.name}
+              </Text>
+            </LinearGradient>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      {/* Recipes Grid */}
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.recipesGrid}>
-          {filteredRecipes.map(recipe => {
-            const isAccessible = canAccessRecipe(recipe);
-            
-            return (
-              <TouchableOpacity
-                key={recipe.id}
-                style={styles.recipeCard}
-                onPress={() => handleRecipePress(recipe)}
-              >
-                <View style={styles.recipeHeader}>
-                  <View style={styles.recipeBadges}>
-                    {recipe.isFree && (
-                      <View style={styles.freeBadge}>
-                        <Text style={styles.freeBadgeText}>GRATIS</Text>
-                      </View>
-                    )}
-                    <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(recipe.difficulty) + '20' }]}>
-                      <Text style={[styles.difficultyBadgeText, { color: getDifficultyColor(recipe.difficulty) }]}>
-                        {recipe.difficulty}
-                      </Text>
-                    </View>
-                  </View>
-                  
-                  {!isAccessible && (
-                    <View style={styles.priceBadge}>
-                      <Text style={styles.priceText}>CHF {recipe.price.toFixed(2)}</Text>
-                    </View>
-                  )}
-                </View>
-
-                <View style={styles.recipeImagePlaceholder}>
-                  <Ionicons name="flask" size={48} color="#e5e7eb" />
-                </View>
-
-                <View style={styles.recipeInfo}>
-                  <Text style={styles.recipeTitle}>{recipe.title}</Text>
-                  <Text style={styles.recipeDescription} numberOfLines={2}>
-                    {recipe.description}
-                  </Text>
-                  
-                  <View style={styles.recipeMetadata}>
-                    <View style={styles.metadataItem}>
-                      <Ionicons name="time-outline" size={14} color="#6b7280" />
-                      <Text style={styles.metadataText}>{recipe.prepTime} Min</Text>
-                    </View>
-                    <View style={styles.metadataItem}>
-                      <Ionicons name="leaf-outline" size={14} color="#6b7280" />
-                      <Text style={styles.metadataText}>{recipe.ingredients ? Object.keys(recipe.ingredients).length : 0} Zutaten</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.benefitsList}>
-                    {recipe.benefits.slice(0, 2).map((benefit, index) => (
-                      <View key={index} style={styles.benefitChip}>
-                        <Text style={styles.benefitText}>{benefit}</Text>
-                      </View>
-                    ))}
-                  </View>
-                </View>
-
-                {!isAccessible && (
-                  <View style={styles.lockedOverlay}>
-                    <Ionicons name="lock-closed" size={24} color="#6b7280" />
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </ScrollView>
-
-      {/* Recipe Detail Modal */}
-      <Modal visible={showRecipeModal} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{selectedRecipe?.title}</Text>
-            <TouchableOpacity onPress={() => setShowRecipeModal(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
+      {/* Recipes List */}
+      <FlatList
+        data={filteredRecipes}
+        renderItem={renderRecipeCard}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.recipeRow}
+        contentContainerStyle={styles.recipesList}
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="flask-outline" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>Keine Rezepte gefunden</Text>
+            <Text style={styles.emptySubtext}>
+              Versuchen Sie eine andere Suche oder Kategorie
+            </Text>
           </View>
-          
-          {selectedRecipe && (
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.recipeDetailHeader}>
-                <Text style={styles.recipeDetailDescription}>{selectedRecipe.description}</Text>
-                
-                <View style={styles.recipeDetailMeta}>
-                  <View style={styles.detailMetaItem}>
-                    <Ionicons name="time" size={20} color="#6b46c1" />
-                    <Text style={styles.detailMetaLabel}>Zubereitungszeit</Text>
-                    <Text style={styles.detailMetaValue}>{selectedRecipe.prepTime} Minuten</Text>
-                  </View>
-                  <View style={styles.detailMetaItem}>
-                    <Ionicons name="speedometer" size={20} color="#6b46c1" />
-                    <Text style={styles.detailMetaLabel}>Schwierigkeit</Text>
-                    <Text style={styles.detailMetaValue}>{selectedRecipe.difficulty}</Text>
-                  </View>
-                </View>
-              </View>
+        }
+      />
 
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>✨ Vorteile</Text>
-                <View style={styles.benefitsGrid}>
-                  {selectedRecipe.benefits.map((benefit, index) => (
-                    <View key={index} style={styles.benefitCard}>
-                      <Ionicons name="checkmark-circle" size={20} color="#10b981" />
-                      <Text style={styles.benefitCardText}>{benefit}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>🛒 Zutaten</Text>
-                <View style={styles.ingredientsList}>
-                  {Object.entries(selectedRecipe.ingredients).map(([key, value]) => (
-                    <View key={key} style={styles.ingredientItem}>
-                      <Ionicons name="leaf" size={16} color="#6b46c1" />
-                      <Text style={styles.ingredientText}>{value}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>📝 Anleitung</Text>
-                <View style={styles.instructionsList}>
-                  {selectedRecipe.instructions.map((instruction, index) => (
-                    <View key={index} style={styles.instructionItem}>
-                      <View style={styles.instructionNumber}>
-                        <Text style={styles.instructionNumberText}>{index + 1}</Text>
-                      </View>
-                      <Text style={styles.instructionText}>{instruction}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-
-              <View style={styles.suitableFor}>
-                {selectedRecipe.skinTypes.length > 0 && (
-                  <View style={styles.suitableSection}>
-                    <Text style={styles.suitableTitle}>Geeignet für Hauttypen:</Text>
-                    <View style={styles.typesList}>
-                      {selectedRecipe.skinTypes.map((type, index) => (
-                        <View key={index} style={styles.typeChip}>
-                          <Text style={styles.typeChipText}>{type}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-                
-                {selectedRecipe.hairTypes.length > 0 && (
-                  <View style={styles.suitableSection}>
-                    <Text style={styles.suitableTitle}>Geeignet für Haartypen:</Text>
-                    <View style={styles.typesList}>
-                      {selectedRecipe.hairTypes.map((type, index) => (
-                        <View key={index} style={styles.typeChip}>
-                          <Text style={styles.typeChipText}>{type}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  </View>
-                )}
-              </View>
-
-              <TouchableOpacity style={styles.downloadButton}>
-                <Ionicons name="download" size={20} color="white" />
-                <Text style={styles.downloadButtonText}>Als PDF speichern</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
+      {renderRecipeModal()}
+      {renderFiltersModal()}
     </View>
   );
 }
@@ -447,367 +836,474 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b46c1',
+  },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
     paddingTop: 60,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    paddingBottom: 30,
+    paddingHorizontal: 20,
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#fff',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 16,
+    color: 'rgba(255,255,255,0.8)',
   },
-  premiumBanner: {
+  searchContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#faf5ff',
-    padding: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  premiumBannerText: {
-    fontSize: 14,
-    color: '#6b46c1',
-    flex: 1,
-  },
-  searchSection: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: 'white',
+    gap: 12,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#fff',
     borderRadius: 12,
     paddingHorizontal: 16,
-    gap: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
+    color: '#333',
+    marginLeft: 8,
     paddingVertical: 12,
-    color: '#111827',
+  },
+  filterButton: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   categoriesContainer: {
-    backgroundColor: 'white',
-    paddingHorizontal: 24,
+    maxHeight: 60,
+  },
+  categoriesContent: {
+    paddingHorizontal: 20,
     paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   categoryChip: {
+    marginRight: 12,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  categoryChipActive: {
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  categoryGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#f3f4f6',
-    marginRight: 8,
-    gap: 8,
+    paddingVertical: 10,
   },
-  categoryChipActive: {
-    backgroundColor: '#6b46c1',
-  },
-  categoryChipText: {
+  categoryText: {
     fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  categoryTextActive: {
+    color: '#fff',
     fontWeight: '600',
-    color: '#6b7280',
   },
-  categoryChipTextActive: {
-    color: 'white',
+  recipesList: {
+    paddingHorizontal: 20,
+    paddingBottom: 100,
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-  },
-  recipesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
+  recipeRow: {
+    justifyContent: 'space-between',
   },
   recipeCard: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    width: '47%',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    width: (width - 50) / 2,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 16,
     overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+  },
+  recipeImageContainer: {
     position: 'relative',
+    height: 150,
   },
-  recipeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 12,
+  recipeImage: {
+    width: '100%',
+    height: '100%',
   },
-  recipeBadges: {
-    flexDirection: 'row',
-    gap: 4,
-    flex: 1,
+  premiumOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  freeBadge: {
-    backgroundColor: '#d1fae5',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
+  premiumText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 4,
   },
-  freeBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#10b981',
+  favoriteButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   difficultyBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  difficultyBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  priceBadge: {
-    backgroundColor: '#6b46c1',
-    paddingHorizontal: 8,
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  priceText: {
-    color: 'white',
+  difficultyText: {
+    color: '#fff',
     fontSize: 12,
-    fontWeight: 'bold',
-  },
-  recipeImagePlaceholder: {
-    height: 120,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
+    fontWeight: '600',
   },
   recipeInfo: {
-    padding: 16,
+    padding: 12,
   },
   recipeTitle: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    height: 40,
   },
-  recipeDescription: {
-    fontSize: 12,
-    color: '#6b7280',
-    marginBottom: 12,
-    lineHeight: 16,
-  },
-  recipeMetadata: {
+  recipeDetails: {
     flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
-  metadataItem: {
+  detailItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  metadataText: {
+  detailText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#666',
   },
-  benefitsList: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  benefitsPreview: {
     gap: 4,
   },
   benefitChip: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#E8F5E9',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 8,
   },
   benefitText: {
-    fontSize: 10,
-    color: '#6b7280',
+    fontSize: 11,
+    color: '#4CAF50',
   },
-  lockedOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    justifyContent: 'center',
+  emptyContainer: {
     alignItems: 'center',
+    paddingTop: 100,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#999',
+    marginTop: 16,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#f8f9fa',
+  },
+  modalImageContainer: {
+    height: height * 0.4,
+    position: 'relative',
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
+  },
+  modalImageGradient: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+    padding: 20,
+    paddingTop: 60,
+  },
+  modalCloseButton: {
+    alignSelf: 'flex-end',
+  },
+  blurButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#111827',
-    flex: 1,
-    marginRight: 16,
+    color: '#fff',
+    marginBottom: 8,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  actionButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
-    flex: 1,
+    padding: 20,
   },
-  recipeDetailHeader: {
-    padding: 24,
-    backgroundColor: '#faf5ff',
-  },
-  recipeDetailDescription: {
-    fontSize: 16,
-    color: '#374151',
-    marginBottom: 24,
-    lineHeight: 24,
-  },
-  recipeDetailMeta: {
+  quickInfo: {
     flexDirection: 'row',
-    gap: 24,
-  },
-  detailMetaItem: {
-    flex: 1,
-    backgroundColor: 'white',
-    padding: 16,
+    justifyContent: 'space-around',
+    backgroundColor: '#fff',
     borderRadius: 16,
+    padding: 20,
+    marginBottom: 24,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+  },
+  infoBox: {
     alignItems: 'center',
-    gap: 8,
   },
-  detailMetaLabel: {
+  infoLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#999',
+    marginTop: 4,
   },
-  detailMetaValue: {
+  infoValue: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: '600',
+    color: '#333',
+    marginTop: 2,
   },
   section: {
-    padding: 24,
+    marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: '600',
+    color: '#333',
     marginBottom: 16,
   },
-  benefitsGrid: {
-    gap: 12,
-  },
-  benefitCard: {
+  benefitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#f0fdf4',
-    padding: 12,
-    borderRadius: 12,
+    marginBottom: 12,
   },
-  benefitCardText: {
-    fontSize: 14,
-    color: '#10b981',
+  benefitItemText: {
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 12,
     flex: 1,
-  },
-  ingredientsList: {
-    gap: 8,
   },
   ingredientItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 8,
+    marginBottom: 8,
+    paddingLeft: 8,
+  },
+  ingredientBullet: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#6b46c1',
+    marginRight: 12,
   },
   ingredientText: {
     fontSize: 16,
-    color: '#374151',
-    flex: 1,
-  },
-  instructionsList: {
-    gap: 16,
+    color: '#333',
   },
   instructionItem: {
     flexDirection: 'row',
-    gap: 16,
-  },
-  instructionNumber: {
-    width: 32,
-    height: 32,
-    backgroundColor: '#6b46c1',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  instructionNumberText: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  instructionText: {
-    fontSize: 16,
-    color: '#374151',
-    flex: 1,
-    lineHeight: 24,
-  },
-  suitableFor: {
-    padding: 24,
-    backgroundColor: '#f9fafb',
-  },
-  suitableSection: {
     marginBottom: 16,
   },
-  suitableTitle: {
+  instructionNumber: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#6b46c1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  instructionNumberText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-    color: '#6b7280',
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+  },
+  tipsContainer: {
+    backgroundColor: '#FFF9E6',
+    borderRadius: 12,
+    padding: 16,
+  },
+  tipItem: {
+    flexDirection: 'row',
     marginBottom: 8,
   },
-  typesList: {
+  tipText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+    flex: 1,
+  },
+  warningsContainer: {
+    backgroundColor: '#FFEBEE',
+    borderRadius: 12,
+    padding: 16,
+  },
+  warningItem: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  warningText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+    flex: 1,
+  },
+  videoButton: {
+    backgroundColor: '#6b46c1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 12,
+    marginTop: 24,
+    gap: 8,
+  },
+  videoButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  filterModalContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  filterModalContent: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  filterModalTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  filterSection: {
+    marginBottom: 24,
+  },
+  filterSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  filterOptions: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  typeChip: {
-    backgroundColor: 'white',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
+  filterOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
   },
-  typeChipText: {
-    fontSize: 14,
-    color: '#374151',
-  },
-  downloadButton: {
+  filterOptionActive: {
     backgroundColor: '#6b46c1',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: 24,
-    paddingVertical: 16,
-    borderRadius: 16,
-    gap: 8,
+    borderColor: '#6b46c1',
   },
-  downloadButtonText: {
-    color: 'white',
+  filterOptionText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  filterOptionTextActive: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  applyFiltersButton: {
+    backgroundColor: '#6b46c1',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  applyFiltersText: {
+    color: '#fff',
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
 });
+
+export default RecipesScreen;

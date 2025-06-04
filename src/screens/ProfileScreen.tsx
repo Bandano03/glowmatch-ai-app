@@ -1,468 +1,1094 @@
-import React, { useState, useContext } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  StatusBar,
+import React, { useState, useEffect, useContext, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Image,
+  TextInput,
+  Modal,
   Switch,
   Alert,
-  Modal
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Platform,
+  Linking,
+  Share,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
+import * as LocalAuthentication from 'expo-local-authentication';
+import * as Notifications from 'expo-notifications';
 import { UserContext } from '../../App';
-import { PREMIUM_TIERS, PremiumTier } from '../types/premium';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
+
+const { width, height } = Dimensions.get('window');
+
+interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar: string;
+  phone?: string;
+  birthDate?: string;
+  skinType?: string;
+  hairType?: string;
+  concerns: string[];
+  allergies: string[];
+  joinedDate: Date;
+}
+
+interface Settings {
+  notifications: {
+    enabled: boolean;
+    dailyReminder: boolean;
+    productRecommendations: boolean;
+    analysisReminder: boolean;
+    reminderTime: string;
+  };
+  privacy: {
+    shareAnalytics: boolean;
+    personalizedAds: boolean;
+    biometricAuth: boolean;
+  };
+  appearance: {
+    darkMode: boolean;
+    language: string;
+    fontSize: 'small' | 'medium' | 'large';
+  };
+  data: {
+    autoBackup: boolean;
+    backupFrequency: 'daily' | 'weekly' | 'monthly';
+    lastBackup?: Date;
+  };
+}
+
+interface PremiumPlan {
+  id: string;
+  name: string;
+  price: number;
+  period: string;
+  features: string[];
+  popular?: boolean;
+  savings?: string;
+}
 
 export function ProfileScreen() {
-  const { user, logout, premiumTier, updatePremiumTier, nextPackageDate, packagesSent } = useContext(UserContext);
-  const [notifications, setNotifications] = useState(true);
-  const [newsletter, setNewsletter] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
+  const navigation = useNavigation();
+  const { user, premiumTier, updatePremiumTier, logout } = useContext(UserContext);
+  
+  // States
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [settings, setSettings] = useState<Settings>({
+    notifications: {
+      enabled: true,
+      dailyReminder: true,
+      productRecommendations: true,
+      analysisReminder: false,
+      reminderTime: '09:00',
+    },
+    privacy: {
+      shareAnalytics: false,
+      personalizedAds: false,
+      biometricAuth: false,
+    },
+    appearance: {
+      darkMode: false,
+      language: 'de',
+      fontSize: 'medium',
+    },
+    data: {
+      autoBackup: true,
+      backupFrequency: 'weekly',
+    },
+  });
+  
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<'silver_monthly' | 'gold_monthly' | 'gold_yearly'>('silver_monthly');
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [editedProfile, setEditedProfile] = useState<UserProfile | null>(null);
+  const [selectedSettingCategory, setSelectedSettingCategory] = useState<string>('');
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Ausloggen',
-      'Möchtest du dich wirklich ausloggen?',
-      [
-        { text: 'Abbrechen', style: 'cancel' },
-        { text: 'Ausloggen', onPress: logout, style: 'destructive' }
-      ]
-    );
-  };
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Account löschen',
-      'Bist du sicher? Diese Aktion kann nicht rückgängig gemacht werden.',
-      [
-        { text: 'Abbrechen', style: 'cancel' },
-        { text: 'Löschen', style: 'destructive', onPress: () => {
-          Alert.alert('Account gelöscht', 'Dein Account wurde erfolgreich gelöscht.');
-          logout();
-        }}
-      ]
-    );
-  };
-
-  const profileStats = [
-    { label: 'Analysen', value: '23', icon: 'camera' },
-    { label: 'Gespeichert', value: '45', icon: 'bookmark' },
-    { label: 'Routine-Tage', value: '15', icon: 'calendar' }
+  // Premium Plans
+  const premiumPlans: PremiumPlan[] = [
+    {
+      id: 'monthly',
+      name: 'Monatlich',
+      price: 9.99,
+      period: 'pro Monat',
+      features: [
+        'Unbegrenzte Analysen',
+        'Alle Premium Rezepte',
+        'Persönliche Beratung',
+        'Werbefreie Nutzung',
+        'Früher Zugang zu neuen Features',
+      ],
+    },
+    {
+      id: 'yearly',
+      name: 'Jährlich',
+      price: 79.99,
+      period: 'pro Jahr',
+      features: [
+        'Alles aus dem Monatsabo',
+        'Sparen Sie 33%',
+        'Exklusive Masterclasses',
+        'Premium Support',
+        'Personalisierte Berichte',
+      ],
+      popular: true,
+      savings: 'Sparen Sie 40€',
+    },
+    {
+      id: 'gold',
+      name: 'Gold Membership',
+      price: 149.99,
+      period: 'pro Jahr',
+      features: [
+        'Alles aus dem Jahresabo',
+        'Persönlicher Beauty Coach',
+        'Monatliche Produktpakete',
+        'VIP Events & Workshops',
+        'Lebenslange Updates',
+      ],
+      savings: 'Unser bestes Angebot',
+    },
   ];
 
-  const formatDate = (date: Date | null) => {
-    if (!date) return '';
-    return date.toLocaleDateString('de-CH', { 
-      day: 'numeric', 
-      month: 'long', 
-      year: 'numeric' 
-    });
+  useEffect(() => {
+    loadUserData();
+    checkBiometric();
+    startAnimations();
+  }, []);
+
+  const startAnimations = () => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
-  const handlePremiumUpgrade = (plan: 'silver_monthly' | 'gold_monthly' | 'gold_yearly') => {
-    // Hier würde Stripe Payment erfolgen
+  const checkBiometric = async () => {
+    const compatible = await LocalAuthentication.hasHardwareAsync();
+    const enrolled = await LocalAuthentication.isEnrolledAsync();
+    setBiometricAvailable(compatible && enrolled);
+  };
+
+  const loadUserData = async () => {
+    setLoading(true);
+    try {
+      // Load profile
+      const savedProfile = await AsyncStorage.getItem('userProfile');
+      if (savedProfile) {
+        setProfile(JSON.parse(savedProfile));
+      } else {
+        // Create default profile
+        const defaultProfile: UserProfile = {
+          id: user?.id || '1',
+          name: user?.name || 'Beauty Lover',
+          email: user?.email || 'user@glowmatch.ai',
+          avatar: user?.avatar || 'https://ui-avatars.com/api/?name=User&background=6b46c1&color=fff',
+          concerns: [],
+          allergies: [],
+          joinedDate: new Date(),
+        };
+        setProfile(defaultProfile);
+      }
+
+      // Load settings
+      const savedSettings = await AsyncStorage.getItem('userSettings');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveProfile = async () => {
+    if (!editedProfile) return;
+
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    try {
+      await AsyncStorage.setItem('userProfile', JSON.stringify(editedProfile));
+      setProfile(editedProfile);
+      setShowEditProfile(false);
+      Alert.alert('Erfolg', 'Profil wurde aktualisiert!');
+    } catch (error) {
+      Alert.alert('Fehler', 'Profil konnte nicht gespeichert werden.');
+    }
+  };
+
+  const saveSettings = async (newSettings: Settings) => {
+    try {
+      await AsyncStorage.setItem('userSettings', JSON.stringify(newSettings));
+      setSettings(newSettings);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+    }
+  };
+
+  const handleImagePicker = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && editedProfile) {
+      setEditedProfile({ ...editedProfile, avatar: result.assets[0].uri });
+    }
+  };
+
+  const handleBiometricToggle = async (enabled: boolean) => {
+    if (enabled && biometricAvailable) {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Authentifizieren Sie sich für biometrische Anmeldung',
+      });
+      
+      if (result.success) {
+        const newSettings = {
+          ...settings,
+          privacy: { ...settings.privacy, biometricAuth: true }
+        };
+        saveSettings(newSettings);
+      }
+    } else {
+      const newSettings = {
+        ...settings,
+        privacy: { ...settings.privacy, biometricAuth: false }
+      };
+      saveSettings(newSettings);
+    }
+  };
+
+  const handleNotificationPermission = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Benachrichtigungen',
+        'Bitte erlauben Sie Benachrichtigungen in den Einstellungen.',
+        [
+          { text: 'Abbrechen', style: 'cancel' },
+          { text: 'Einstellungen', onPress: () => Linking.openSettings() }
+        ]
+      );
+    }
+  };
+
+  const handlePremiumPurchase = (plan: PremiumPlan) => {
     Alert.alert(
       'Premium Upgrade',
-      `${plan} würde hier über Stripe abgewickelt werden.`,
+      `Möchten Sie ${plan.name} für ${plan.price}€ ${plan.period} abonnieren?`,
       [
         { text: 'Abbrechen', style: 'cancel' },
-        { 
-          text: 'Demo: Upgrade simulieren', 
-          onPress: () => {
-            const newTier = plan.includes('gold') ? 'gold' : 'silver';
-            updatePremiumTier(newTier as PremiumTier);
+        {
+          text: 'Kaufen',
+          onPress: async () => {
+            // Hier würde die echte Kaufabwicklung stattfinden
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            updatePremiumTier(plan.id === 'gold' ? 'gold' : 'silver');
             setShowPremiumModal(false);
-            Alert.alert('Erfolg!', `Du bist jetzt ${PREMIUM_TIERS[newTier].name}-Mitglied! 🎉`);
+            Alert.alert('Erfolg!', 'Willkommen als Premium-Mitglied!');
           }
         }
       ]
     );
   };
 
-  const menuSections = [
-    {
-      title: 'Account',
-      items: [
-        { 
-          icon: 'person-outline', 
-          label: 'Persönliche Daten', 
-          action: () => Alert.alert('Info', 'Persönliche Daten bearbeiten') 
-        },
-        { 
-          icon: 'shield-checkmark-outline', 
-          label: 'Datenschutz & Sicherheit', 
-          action: () => Alert.alert('Info', 'Datenschutzeinstellungen') 
-        },
-        { 
-          icon: 'card-outline', 
-          label: 'Zahlungsmethoden', 
-          action: () => Alert.alert('Info', 'Zahlungsmethoden verwalten'),
-          showPremiumBadge: true
-        }
-      ]
-    },
-    {
-      title: 'Einstellungen',
-      items: [
-        { 
-          icon: 'notifications-outline', 
-          label: 'Push-Benachrichtigungen', 
-          toggle: true,
-          value: notifications,
-          onToggle: setNotifications
-        },
-        { 
-          icon: 'mail-outline', 
-          label: 'Newsletter', 
-          toggle: true,
-          value: newsletter,
-          onToggle: setNewsletter
-        },
-        { 
-          icon: 'moon-outline', 
-          label: 'Dark Mode', 
-          toggle: true,
-          value: darkMode,
-          onToggle: setDarkMode
-        }
-      ]
-    },
-    {
-      title: 'Support',
-      items: [
-        { 
-          icon: 'help-circle-outline', 
-          label: 'Hilfe & FAQ', 
-          action: () => Alert.alert('Info', 'Hilfe-Center öffnen') 
-        },
-        { 
-          icon: 'chatbubble-outline', 
-          label: 'Kontakt', 
-          action: () => Alert.alert('Info', 'support@glowmatch.ai') 
-        },
-        { 
-          icon: 'document-text-outline', 
-          label: 'AGB & Datenschutz', 
-          action: () => Alert.alert('Info', 'Rechtliche Dokumente') 
-        }
-      ]
+  const handleExportData = async () => {
+    const data = {
+      profile,
+      settings,
+      exportDate: new Date().toISOString(),
+    };
+    
+    try {
+      await Share.share({
+        message: JSON.stringify(data, null, 2),
+        title: 'GlowMatch Datenexport',
+      });
+    } catch (error) {
+      Alert.alert('Fehler', 'Daten konnten nicht exportiert werden.');
     }
-  ];
+  };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mein Profil</Text>
-      </View>
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Account löschen',
+      'Sind Sie sicher? Diese Aktion kann nicht rückgängig gemacht werden.',
+      [
+        { text: 'Abbrechen', style: 'cancel' },
+        {
+          text: 'Löschen',
+          style: 'destructive',
+          onPress: async () => {
+            // Hier würde die echte Account-Löschung stattfinden
+            await AsyncStorage.clear();
+            logout();
+          }
+        }
+      ]
+    );
+  };
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.profileHeader}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{user?.name?.charAt(0) || 'D'}</Text>
+  const renderHeader = () => {
+    if (!profile) return null;
+
+    return (
+      <LinearGradient
+        colors={['#6b46c1', '#8b5cf6']}
+        style={styles.header}
+      >
+        <Animated.View 
+          style={[
+            styles.headerContent,
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+          ]}
+        >
+          <View style={styles.profileSection}>
+            <TouchableOpacity onPress={() => setShowEditProfile(true)}>
+              <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+              <View style={styles.editAvatarBadge}>
+                <Ionicons name="camera" size={16} color="#fff" />
               </View>
-              <TouchableOpacity style={styles.editAvatarButton}>
-                <Ionicons name="camera" size={16} color="white" />
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
             
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user?.name || 'Demo User'}</Text>
-              <Text style={styles.profileEmail}>{user?.email || 'demo@glowmatch.ai'}</Text>
-              
-              {premiumTier !== 'basic' ? (
-                <View style={[styles.premiumBadge, { backgroundColor: premiumTier === 'gold' ? '#fef3c7' : '#f3f4f6' }]}>
-                  <Ionicons 
-                    name={premiumTier === 'gold' ? 'crown' : 'star'} 
-                    size={16} 
-                    color={premiumTier === 'gold' ? '#f59e0b' : '#6b7280'} 
-                  />
-                  <Text style={[styles.premiumBadgeText, { color: premiumTier === 'gold' ? '#92400e' : '#374151' }]}>
-                    {PREMIUM_TIERS[premiumTier].name} Member
-                  </Text>
-                </View>
-              ) : (
-                <TouchableOpacity 
-                  style={styles.upgradeBadge}
-                  onPress={() => setShowPremiumModal(true)}
-                >
-                  <Text style={styles.upgradeBadgeText}>Upgrade to Premium</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#6b46c1" />
-                </TouchableOpacity>
-              )}
+              <Text style={styles.profileName}>{profile.name}</Text>
+              <Text style={styles.profileEmail}>{profile.email}</Text>
+              <View style={styles.premiumBadge}>
+                <Ionicons 
+                  name={premiumTier === 'gold' ? 'star' : premiumTier === 'silver' ? 'star-half' : 'star-outline'} 
+                  size={16} 
+                  color="#FFD700" 
+                />
+                <Text style={styles.premiumText}>
+                  {premiumTier === 'gold' ? 'Gold Member' : 
+                   premiumTier === 'silver' ? 'Silver Member' : 'Basic'}
+                </Text>
+              </View>
             </View>
           </View>
 
-          {/* Stats */}
           <View style={styles.statsContainer}>
-            {profileStats.map((stat, index) => (
-              <View key={index} style={styles.statItem}>
-                <Ionicons name={stat.icon} size={24} color="#6b46c1" />
-                <Text style={styles.statValue}>{stat.value}</Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>127</Text>
+              <Text style={styles.statLabel}>Analysen</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>45</Text>
+              <Text style={styles.statLabel}>Rezepte</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Text style={styles.statNumber}>89</Text>
+              <Text style={styles.statLabel}>Tage dabei</Text>
+            </View>
           </View>
-        </View>
+        </Animated.View>
+      </LinearGradient>
+    );
+  };
 
-        {/* Gold Package Info */}
-        {premiumTier === 'gold' && nextPackageDate && (
-          <View style={styles.goldPackageCard}>
-            <View style={styles.goldPackageHeader}>
-              <View style={styles.goldPackageIcon}>
-                <Ionicons name="gift" size={32} color="#f59e0b" />
-              </View>
-              <View style={styles.goldPackageInfo}>
-                <Text style={styles.goldPackageTitle}>Nächstes Selfcare-Paket</Text>
-                <Text style={styles.goldPackageDate}>{formatDate(nextPackageDate)}</Text>
-                <Text style={styles.goldPackageCount}>Paket #{packagesSent + 1}</Text>
-              </View>
-            </View>
-            <View style={styles.goldPackageFeatures}>
-              <Text style={styles.goldPackageFeatureText}>
-                ✨ Personalisiert auf deine aktuelle Haut- & Haaranalyse
-              </Text>
-              <Text style={styles.goldPackageFeatureText}>
-                📦 Kostenloser Versand inklusive
-              </Text>
-              <Text style={styles.goldPackageFeatureText}>
-                🎁 Überraschungsprodukte im Wert von 50+ CHF
-              </Text>
-            </View>
-          </View>
-        )}
+  const renderMenuSection = () => {
+    const menuItems = [
+      {
+        id: 'premium',
+        title: 'Premium Upgrade',
+        subtitle: premiumTier === 'basic' ? 'Alle Features freischalten' : 'Ihr Abo verwalten',
+        icon: 'star',
+        color: '#FFD700',
+        onPress: () => setShowPremiumModal(true),
+        showBadge: premiumTier === 'basic',
+      },
+      {
+        id: 'profile',
+        title: 'Profil bearbeiten',
+        subtitle: 'Persönliche Daten & Präferenzen',
+        icon: 'person',
+        color: '#4ECDC4',
+        onPress: () => setShowEditProfile(true),
+      },
+      {
+        id: 'settings',
+        title: 'Einstellungen',
+        subtitle: 'App-Einstellungen & Datenschutz',
+        icon: 'settings',
+        color: '#6b46c1',
+        onPress: () => setShowSettings(true),
+      },
+      {
+        id: 'history',
+        title: 'Meine Aktivitäten',
+        subtitle: 'Analysen, Rezepte & Favoriten',
+        icon: 'time',
+        color: '#FFB923',
+        onPress: () => navigation.navigate('Verlauf' as never),
+      },
+      {
+        id: 'share',
+        title: 'App teilen',
+        subtitle: 'Freunde einladen & Prämien erhalten',
+        icon: 'share-social',
+        color: '#FF6B6B',
+        onPress: () => {
+          Share.share({
+            message: 'Entdecke GlowMatch - Die KI Beauty App! 🌟\n\nDownload: https://glowmatch.ai/download',
+            title: 'GlowMatch empfehlen',
+          });
+        },
+      },
+      {
+        id: 'help',
+        title: 'Hilfe & Support',
+        subtitle: 'FAQ, Kontakt & Tutorials',
+        icon: 'help-circle',
+        color: '#00BFA5',
+        onPress: () => Alert.alert('Support', 'support@glowmatch.ai'),
+      },
+      {
+        id: 'about',
+        title: 'Über GlowMatch',
+        subtitle: 'Version 1.0.0',
+        icon: 'information-circle',
+        color: '#9C27B0',
+        onPress: () => Alert.alert('GlowMatch', 'Version 1.0.0\n\n© 2024 GlowMatch AI'),
+      },
+    ];
 
-        {/* Beauty Profile */}
-        <View style={styles.beautyProfileCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Mein Beauty-Profil</Text>
-            <TouchableOpacity>
-              <Text style={styles.editButton}>Bearbeiten</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.beautyInfo}>
-            <View style={styles.beautyItem}>
-              <Text style={styles.beautyLabel}>Hauttyp</Text>
-              <Text style={styles.beautyValue}>Normal</Text>
+    return (
+      <Animated.View style={[styles.menuSection, { opacity: fadeAnim }]}>
+        {menuItems.map((item, index) => (
+          <TouchableOpacity
+            key={item.id}
+            style={[
+              styles.menuItem,
+              index === menuItems.length - 1 && styles.menuItemLast
+            ]}
+            onPress={item.onPress}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuIconContainer, { backgroundColor: `${item.color}20` }]}>
+              <Ionicons name={item.icon as any} size={24} color={item.color} />
             </View>
-            <View style={styles.beautyItem}>
-              <Text style={styles.beautyLabel}>Haartyp</Text>
-              <Text style={styles.beautyValue}>Wellig</Text>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
             </View>
-            <View style={styles.beautyItem}>
-              <Text style={styles.beautyLabel}>Hauptanliegen</Text>
-              <Text style={styles.beautyValue}>Feuchtigkeit, Anti-Aging</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Menu Sections */}
-        {menuSections.map((section, sectionIndex) => (
-          <View key={sectionIndex} style={styles.menuSection}>
-            <Text style={styles.menuSectionTitle}>{section.title}</Text>
-            
-            {section.items.map((item, itemIndex) => (
-              <TouchableOpacity
-                key={itemIndex}
-                style={styles.menuItem}
-                onPress={item.action}
-                disabled={item.toggle}
-              >
-                <View style={styles.menuItemLeft}>
-                  <View style={styles.menuItemIcon}>
-                    <Ionicons name={item.icon} size={20} color="#6b7280" />
-                  </View>
-                  <Text style={styles.menuItemLabel}>{item.label}</Text>
-                  {item.showPremiumBadge && premiumTier === 'basic' && (
-                    <View style={styles.premiumIndicator}>
-                      <Ionicons name="crown" size={12} color="#6b46c1" />
-                    </View>
-                  )}
+            <View style={styles.menuRight}>
+              {item.showBadge && (
+                <View style={styles.newBadge}>
+                  <Text style={styles.newBadgeText}>NEU</Text>
                 </View>
-                
-                {item.toggle ? (
-                  <Switch
-                    value={item.value}
-                    onValueChange={item.onToggle}
-                    trackColor={{ false: '#e5e7eb', true: '#c7b5f5' }}
-                    thumbColor={item.value ? '#6b46c1' : '#f3f4f6'}
-                  />
-                ) : (
-                  <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+              )}
+              <Ionicons name="chevron-forward" size={20} color="#999" />
+            </View>
+          </TouchableOpacity>
         ))}
+      </Animated.View>
+    );
+  };
 
-        {/* Danger Zone */}
-        <View style={styles.dangerZone}>
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={20} color="white" />
-            <Text style={styles.logoutButtonText}>Ausloggen</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteAccount}>
-            <Text style={styles.deleteButtonText}>Account löschen</Text>
-          </TouchableOpacity>
-        </View>
+  const renderEditProfileModal = () => {
+    if (!profile) return null;
 
-        {/* App Info */}
-        <View style={styles.appInfo}>
-          <Text style={styles.appVersion}>GlowMatch AI v1.0.0</Text>
-          <Text style={styles.copyright}>© 2024 GlowMatch. Alle Rechte vorbehalten.</Text>
-        </View>
-      </ScrollView>
-
-      {/* Premium Modal */}
-      <Modal visible={showPremiumModal} animationType="slide" presentationStyle="pageSheet">
+    return (
+      <Modal
+        visible={showEditProfile}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEditProfile(false)}
+      >
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Premium freischalten</Text>
-            <TouchableOpacity onPress={() => setShowPremiumModal(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
+            <TouchableOpacity onPress={() => setShowEditProfile(false)}>
+              <Text style={styles.modalCancel}>Abbrechen</Text>
+            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Profil bearbeiten</Text>
+            <TouchableOpacity onPress={saveProfile}>
+              <Text style={styles.modalSave}>Speichern</Text>
             </TouchableOpacity>
           </View>
-          
+
           <ScrollView style={styles.modalContent}>
-            <View style={styles.premiumHero}>
-              <View style={styles.premiumIcon}>
-                <Ionicons name="crown" size={48} color="#6b46c1" />
+            <TouchableOpacity style={styles.avatarEditContainer} onPress={handleImagePicker}>
+              <Image 
+                source={{ uri: editedProfile?.avatar || profile.avatar }} 
+                style={styles.avatarEdit} 
+              />
+              <View style={styles.avatarEditOverlay}>
+                <Ionicons name="camera" size={32} color="#fff" />
+                <Text style={styles.avatarEditText}>Foto ändern</Text>
               </View>
-              <Text style={styles.premiumTitle}>Wähle dein Premium-Paket</Text>
-              <Text style={styles.premiumSubtitle}>
-                Schalte alle Features frei und erreiche deine Beauty-Ziele schneller
-              </Text>
-            </View>
-
-            {/* Premium Tiers */}
-            <View style={styles.tiersContainer}>
-              {/* Silver Tier */}
-              <TouchableOpacity
-                style={[
-                  styles.tierCard,
-                  selectedPlan === 'silver_monthly' && styles.tierCardSelected
-                ]}
-                onPress={() => setSelectedPlan('silver_monthly')}
-              >
-                <View style={styles.tierHeader}>
-                  <Ionicons name="star" size={32} color="#9ca3af" />
-                  <Text style={styles.tierName}>Silber</Text>
-                  <Text style={styles.tierPrice}>CHF 15</Text>
-                  <Text style={styles.tierPeriod}>pro Monat</Text>
-                </View>
-                
-                <View style={styles.tierFeatures}>
-                  {PREMIUM_TIERS.silver.features.map((feature, index) => (
-                    <View key={index} style={styles.tierFeature}>
-                      <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                      <Text style={styles.tierFeatureText}>{feature}</Text>
-                    </View>
-                  ))}
-                </View>
-              </TouchableOpacity>
-
-              {/* Gold Monthly */}
-              <TouchableOpacity
-                style={[
-                  styles.tierCard,
-                  styles.tierCardGold,
-                  selectedPlan === 'gold_monthly' && styles.tierCardSelected
-                ]}
-                onPress={() => setSelectedPlan('gold_monthly')}
-              >
-                <View style={styles.popularBadge}>
-                  <Text style={styles.popularBadgeText}>BELIEBT</Text>
-                </View>
-                
-                <View style={styles.tierHeader}>
-                  <Ionicons name="crown" size={32} color="#f59e0b" />
-                  <Text style={styles.tierName}>Gold</Text>
-                  <Text style={styles.tierPrice}>CHF 25</Text>
-                  <Text style={styles.tierPeriod}>pro Monat</Text>
-                </View>
-                
-                <View style={styles.tierFeatures}>
-                  {PREMIUM_TIERS.gold.features.map((feature, index) => (
-                    <View key={index} style={styles.tierFeature}>
-                      <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                      <Text style={styles.tierFeatureText}>{feature}</Text>
-                    </View>
-                  ))}
-                </View>
-
-                <View style={styles.goldSpecialBox}>
-                  <Text style={styles.goldSpecialText}>
-                    {PREMIUM_TIERS.gold.packageInfo}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Gold Yearly */}
-              <TouchableOpacity
-                style={[
-                  styles.tierCard,
-                  styles.tierCardGold,
-                  selectedPlan === 'gold_yearly' && styles.tierCardSelected
-                ]}
-                onPress={() => setSelectedPlan('gold_yearly')}
-              >
-                <View style={styles.saveBadge}>
-                  <Text style={styles.saveBadgeText}>SPARE 17%</Text>
-                </View>
-                
-                <View style={styles.tierHeader}>
-                  <Ionicons name="crown" size={32} color="#f59e0b" />
-                  <Text style={styles.tierName}>Gold Jahresabo</Text>
-                  <Text style={styles.tierPrice}>CHF 250</Text>
-                  <Text style={styles.tierPeriod}>pro Jahr</Text>
-                  <Text style={styles.tierSaving}>Nur CHF 20.83/Monat</Text>
-                </View>
-                
-                <View style={styles.tierFeatures}>
-                  <View style={styles.tierFeature}>
-                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                    <Text style={styles.tierFeatureText}>Alle Gold-Features</Text>
-                  </View>
-                  <View style={styles.tierFeature}>
-                    <Ionicons name="checkmark-circle" size={16} color="#10b981" />
-                    <Text style={styles.tierFeatureText}>2 Monate gratis</Text>
-                  </View>
-                  <View style={styles.tierFeature}>
-                    <Ionicons name="gift" size={16} color="#f59e0b" />
-                    <Text style={styles.tierFeatureText}>Willkommensgeschenk</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity 
-              style={styles.subscribeButton}
-              onPress={() => handlePremiumUpgrade(selectedPlan)}
-            >
-              <Text style={styles.subscribeButtonText}>
-                {selectedPlan === 'silver_monthly' ? 'Silber werden für CHF 15/Monat' :
-                 selectedPlan === 'gold_monthly' ? 'Gold werden für CHF 25/Monat' :
-                 'Gold Jahresabo für CHF 250'}
-              </Text>
             </TouchableOpacity>
 
-            <Text style={styles.termsText}>
-              Mit dem Abschluss stimmst du unseren AGB und Datenschutzbestimmungen zu.
-              Jederzeit kündbar. {selectedPlan === 'gold_yearly' ? 'Keine Rückerstattung bei vorzeitiger Kündigung.' : ''}
-            </Text>
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Name</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.name || profile.name}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, name: text })}
+                placeholder="Ihr Name"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>E-Mail</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.email || profile.email}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, email: text })}
+                placeholder="ihre.email@beispiel.de"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Telefon</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.phone || profile.phone}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, phone: text })}
+                placeholder="+49 123 456789"
+                keyboardType="phone-pad"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Geburtsdatum</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editedProfile?.birthDate || profile.birthDate}
+                onChangeText={(text) => setEditedProfile({ ...profile, ...editedProfile, birthDate: text })}
+                placeholder="TT.MM.JJJJ"
+              />
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Hauttyp</Text>
+              <View style={styles.chipContainer}>
+                {['Normal', 'Trocken', 'Fettig', 'Mischhaut', 'Sensibel'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.chip,
+                      (editedProfile?.skinType || profile.skinType) === type && styles.chipActive
+                    ]}
+                    onPress={() => setEditedProfile({ ...profile, ...editedProfile, skinType: type })}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      (editedProfile?.skinType || profile.skinType) === type && styles.chipTextActive
+                    ]}>
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Haartyp</Text>
+              <View style={styles.chipContainer}>
+                {['1A-1C', '2A-2C', '3A-3C', '4A-4C'].map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.chip,
+                      (editedProfile?.hairType || profile.hairType) === type && styles.chipActive
+                    ]}
+                    onPress={() => setEditedProfile({ ...profile, ...editedProfile, hairType: type })}
+                  >
+                    <Text style={[
+                      styles.chipText,
+                      (editedProfile?.hairType || profile.hairType) === type && styles.chipTextActive
+                    ]}>
+                      {type}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Hautprobleme</Text>
+              <View style={styles.chipContainer}>
+                {['Akne', 'Rötungen', 'Pigmentflecken', 'Falten', 'Trockenheit'].map((concern) => {
+                  const concerns = editedProfile?.concerns || profile.concerns || [];
+                  const isSelected = concerns.includes(concern);
+                  
+                  return (
+                    <TouchableOpacity
+                      key={concern}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => {
+                        const newConcerns = isSelected
+                          ? concerns.filter(c => c !== concern)
+                          : [...concerns, concern];
+                        setEditedProfile({ ...profile, ...editedProfile, concerns: newConcerns });
+                      }}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {concern}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.formSection}>
+              <Text style={styles.formLabel}>Allergien & Unverträglichkeiten</Text>
+              <TextInput
+                style={[styles.formInput, styles.formTextArea]}
+                value={(editedProfile?.allergies || profile.allergies || []).join(', ')}
+                onChangeText={(text) => {
+                  const allergies = text.split(',').map(a => a.trim()).filter(a => a);
+                  setEditedProfile({ ...profile, ...editedProfile, allergies });
+                }}
+                placeholder="z.B. Duftstoffe, Parabene, Nüsse"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
           </ScrollView>
         </View>
       </Modal>
+    );
+  };
+
+  const renderSettingsModal = () => (
+    <Modal
+      visible={showSettings}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowSettings(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={() => setShowSettings(false)}>
+            <Ionicons name="close" size={28} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>Einstellungen</Text>
+          <View style={{ width: 28 }} />
+        </View>
+
+        <ScrollView style={styles.modalContent}>
+          {/* Benachrichtigungen */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Benachrichtigungen</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Push-Benachrichtigungen</Text>
+                <Text style={styles.settingDescription}>Alle App-Benachrichtigungen</Text>
+              </View>
+              <Switch
+                value={settings.notifications.enabled}
+                onValueChange={async (value) => {
+                  if (value) await handleNotificationPermission();
+                  const newSettings = {
+                    ...settings,
+                    notifications: { ...settings.notifications, enabled: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Tägliche Erinnerung</Text>
+                <Text style={styles.settingDescription}>Routine-Reminder um {settings.notifications.reminderTime}</Text>
+              </View>
+              <Switch
+                value={settings.notifications.dailyReminder}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    notifications: { ...settings.notifications, dailyReminder: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Produktempfehlungen</Text>
+                <Text style={styles.settingDescription}>Neue passende Produkte</Text>
+              </View>
+              <Switch
+                value={settings.notifications.productRecommendations}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    notifications: { ...settings.notifications, productRecommendations: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
+
+          {/* Datenschutz */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Datenschutz & Sicherheit</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Biometrische Anmeldung</Text>
+                <Text style={styles.settingDescription}>Face ID / Touch ID verwenden</Text>
+              </View>
+              <Switch
+                value={settings.privacy.biometricAuth}
+                onValueChange={handleBiometricToggle}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+                disabled={!biometricAvailable}
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Anonyme Analytik</Text>
+                <Text style={styles.settingDescription}>Hilft uns die App zu verbessern</Text>
+              </View>
+              <Switch
+                value={settings.privacy.shareAnalytics}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    privacy: { ...settings.privacy, shareAnalytics: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Datenschutzerklärung</Text>
+              <Ionicons name="open-outline" size={16} color="#6b46c1" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Nutzungsbedingungen</Text>
+              <Ionicons name="open-outline" size={16} color="#6b46c1" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Erscheinungsbild */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Erscheinungsbild</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Dunkler Modus</Text>
+                <Text style={styles.settingDescription}>Augenschonend bei Nacht</Text>
+              </View>
+              <Switch
+                value={settings.appearance.darkMode}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    appearance: { ...settings.appearance, darkMode: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Sprache ändern</Text>
+              <View style={styles.settingValue}>
+                <Text style={styles.settingValueText}>Deutsch</Text>
+                <Ionicons name="chevron-forward" size={16} color="#999" />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Schriftgröße</Text>
+              <View style={styles.settingValue}>
+                <Text style={styles.settingValueText}>
+                  {settings.appearance.fontSize === 'small' ? 'Klein' :
+                   settings.appearance.fontSize === 'large' ? 'Groß' : 'Mittel'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="#999" />
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Daten & Backup */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Daten & Backup</Text>
+            
+            <View style={styles.settingItem}>
+              <View style={styles.settingInfo}>
+                <Text style={styles.settingTitle}>Automatisches Backup</Text>
+                <Text style={styles.settingDescription}>
+                  {settings.data.backupFrequency === 'daily' ? 'Täglich' :
+                   settings.data.backupFrequency === 'weekly' ? 'Wöchentlich' : 'Monatlich'}
+                </Text>
+              </View>
+              <Switch
+                value={settings.data.autoBackup}
+                onValueChange={(value) => {
+                  const newSettings = {
+                    ...settings,
+                    data: { ...settings.data, autoBackup: value }
+                  };
+                  saveSettings(newSettings);
+                }}
+                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            <TouchableOpacity style={styles.settingButton} onPress={handleExportData}>
+              <Text style={styles.settingButtonText}>Daten exportieren</Text>
+              <Ionicons name="download-outline" size={16} color="#6b46c1" />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.settingButton}>
+              <Text style={styles.settingButtonText}>Cache leeren</Text>
+              <Text style={styles.settingValueText}>124 MB</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Account */}
+          <View style={styles.settingsSection}>
+            <Text style={styles.settingsSectionTitle}>Account</Text>
+            
+            <TouchableOpacity style={styles.settingButton} onPress={() => {
+              Alert.alert('Abmelden', 'Möchten Sie sich wirklich abmelden?', [
+                { text: 'Abbrechen', style: 'cancel' },
+                { text: 'Abmelden', onPress: logout }
+              ]);
+            }}>
+              <Text style={[styles.settingButtonText, { color: '#FF6B6B' }]}>Abmelden</Text>
+              <Ionicons name="log-out-outline" size={16} color="#FF6B6B" />
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.settingButton} 
+              onPress={() => setShowDeleteAccount(true)}
+            >
+              <Text style={[styles.settingButtonText, { color: '#FF3B30' }]}>
+                Account löschen
+              </Text>
+              <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ height: 50 }} />
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  const renderPremiumModal = () => (
+    <Modal
+      visible={showPremiumModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowPremiumModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          <TouchableOpacity
+            style={styles.premiumCloseButton}
+            onPress={() => setShowPremiumModal(false)}
+          >
+            <Ionicons name="close" size={28} color="#333" />
+          </TouchableOpacity>
+
+          <LinearGradient
+            colors={['#FFD700', '#FFA500']}
+            style={styles.premiumHeader}
+          >
+            <Ionicons name="star" size={48} color="#fff" />
+            <Text style={styles.premiumHeaderTitle}>GlowMatch Premium</Text>
+            <Text style={styles.premiumHeaderSubtitle}>
+              Entdecken Sie Ihr volles Beauty-Potenzial
+            </Text>
+          </LinearGradient>
+
+          <View style={styles.premiumContent}>
+            {/* Current Status */}
+            {premiumTier !== 'basic' && (
+              <View style={styles.currentPlanBox}>
+                <Text style={styles.currentPlanTitle}>Ihr aktueller Plan</Text>
+                <Text style={styles.currentPlanName}>
+                  {premiumTier === 'gold' ? 'Gold Membership' : 'Silver Premium'}
+                </Text>
+                <TouchableOpacity style={styles.managePlanButton}>
+                  <Text style={styles.managePlanText}>Abo verwalten</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Benefits */}
+            <View style={styles.benefitsSection}>
+              <Text style={styles.benefitsTitle}>Premium Vorteile</Text>
+              {[
+                { icon: 'infinite', text: 'Unbegrenzte KI-Analysen' },
+                { icon: 'book', text: 'Zugang zu allen DIY-Rezepten' },
+                { icon: 'person', text: 'Persönliche Beauty-Beratung' },
+                { icon: 'close-circle', text: 'Keine Werbung' },
+                { icon: 'rocket', text: 'Früher Zugang zu neuen Features' },
+                { icon: 'gift', text: 'Monatliche Überraschungen (Gold)' },
+              ].map((benefit, index) => (
+                <View key={index} style={styles.benefitItem}>
+                  <Ionicons name={benefit.icon as any} size={24} color="#6b46c1" />
+                  <Text style={styles.benefitText}>{benefit.text}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Plans */}
+            <View style={styles.plansSection}>
+              <Text style={styles.plansTitle}>Wählen Sie Ihren Plan</Text>
+              {premiumPlans.map((plan) => (
+                <TouchableOpacity
+                  key={plan.id}
+                  style={[styles.planCard, plan.popular && styles.planCardPopular]}
+                  onPress={() => handlePremiumPurchase(plan)}
+                  activeOpacity={0.9}
+                >
+                  {plan.popular && (
+                    <View style={styles.popularBadge}>
+                      <Text style={styles.popularBadgeText}>BELIEBT</Text>
+                    </View>
+                  )}
+                  
+                  <Text style={styles.planName}>{plan.name}</Text>
+                  <View style={styles.planPriceContainer}>
+                    <Text style={styles.planPrice}>€{plan.price}</Text>
+                    <Text style={styles.planPeriod}>{plan.period}</Text>
+                  </View>
+                  
+                  {plan.savings && (
+                    <View style={styles.planSavings}>
+                      <Text style={styles.planSavingsText}>{plan.savings}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.planFeatures}>
+                    {plan.features.map((feature, index) => (
+                      <View key={index} style={styles.planFeature}>
+                        <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                        <Text style={styles.planFeatureText}>{feature}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={[styles.planButton, plan.popular && styles.planButtonPopular]}>
+                    <Text style={[styles.planButtonText, plan.popular && styles.planButtonTextPopular]}>
+                      Jetzt upgraden
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* FAQ */}
+            <View style={styles.faqSection}>
+              <Text style={styles.faqTitle}>Häufige Fragen</Text>
+              <TouchableOpacity style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>Kann ich jederzeit kündigen?</Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>Gibt es eine Testphase?</Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.faqItem}>
+                <Text style={styles.faqQuestion}>Was ist im Gold-Paket enthalten?</Text>
+                <Ionicons name="chevron-down" size={20} color="#999" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Restore Purchase */}
+            <TouchableOpacity style={styles.restoreButton}>
+              <Text style={styles.restoreButtonText}>Käufe wiederherstellen</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6b46c1" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {renderHeader()}
+        {renderMenuSection()}
+        
+        <TouchableOpacity style={styles.logoutButton} onPress={() => {
+          Alert.alert('Abmelden', 'Möchten Sie sich wirklich abmelden?', [
+            { text: 'Abbrechen', style: 'cancel' },
+            { text: 'Abmelden', onPress: logout, style: 'destructive' }
+          ]);
+        }}>
+          <Text style={styles.logoutText}>Abmelden</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {renderEditProfileModal()}
+      {renderSettingsModal()}
+      {renderPremiumModal()}
     </View>
   );
 }
@@ -472,470 +1098,522 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  header: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    paddingTop: 60,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-  },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  content: {
+  loadingContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  profileCard: {
-    backgroundColor: 'white',
-    margin: 24,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+  header: {
+    paddingTop: 60,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
   },
-  profileHeader: {
+  headerContent: {
+    alignItems: 'center',
+  },
+  profileSection: {
     flexDirection: 'row',
-    marginBottom: 24,
-  },
-  avatarContainer: {
-    position: 'relative',
-    marginRight: 16,
+    alignItems: 'center',
+    marginBottom: 20,
   },
   avatar: {
     width: 80,
     height: 80,
-    backgroundColor: '#ec4899',
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 40,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  avatarText: {
-    color: 'white',
-    fontSize: 32,
-    fontWeight: 'bold',
-  },
-  editAvatarButton: {
+  editAvatarBadge: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    width: 32,
-    height: 32,
     backgroundColor: '#6b46c1',
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
-    borderColor: 'white',
+    borderWidth: 2,
+    borderColor: '#fff',
   },
   profileInfo: {
+    marginLeft: 20,
     flex: 1,
-    justifyContent: 'center',
   },
   profileName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#fff',
   },
   profileEmail: {
     fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
   },
   premiumBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 4,
+    borderRadius: 12,
     alignSelf: 'flex-start',
-    gap: 4,
+    marginTop: 8,
   },
-  premiumBadgeText: {
+  premiumText: {
+    color: '#fff',
     fontSize: 12,
     fontWeight: '600',
-  },
-  upgradeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-    gap: 4,
-  },
-  upgradeBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#6b46c1',
+    marginLeft: 4,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingTop: 24,
+    width: '100%',
+    paddingTop: 20,
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: 'rgba(255,255,255,0.2)',
   },
   statItem: {
     alignItems: 'center',
   },
-  statValue: {
+  statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#111827',
-    marginVertical: 4,
+    color: '#fff',
   },
   statLabel: {
     fontSize: 12,
-    color: '#6b7280',
-  },
-  goldPackageCard: {
-    backgroundColor: 'white',
-    marginHorizontal: 24,
-    marginBottom: 24,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: '#fbbf24',
-  },
-  goldPackageHeader: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  goldPackageIcon: {
-    width: 64,
-    height: 64,
-    backgroundColor: '#fef3c7',
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  goldPackageInfo: {
-    flex: 1,
-  },
-  goldPackageTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  goldPackageDate: {
-    fontSize: 16,
-    color: '#f59e0b',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  goldPackageCount: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  goldPackageFeatures: {
-    gap: 8,
-  },
-  goldPackageFeatureText: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 20,
-  },
-  beautyProfileCard: {
-    backgroundColor: 'white',
-    marginHorizontal: 24,
-    marginBottom: 24,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  editButton: {
-    fontSize: 14,
-    color: '#6b46c1',
-    fontWeight: '600',
-  },
-  beautyInfo: {
-    gap: 16,
-  },
-  beautyItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  beautyLabel: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  beautyValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#111827',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 4,
   },
   menuSection: {
-    backgroundColor: 'white',
-    marginHorizontal: 24,
-    marginBottom: 24,
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  menuSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginBottom: 16,
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
   },
   menuItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  menuItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  menuItemLast: {
+    borderBottomWidth: 0,
   },
-  menuItemIcon: {
+  menuIconContainer: {
     width: 40,
     height: 40,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
   },
-  menuItemLabel: {
-    fontSize: 16,
-    color: '#111827',
+  menuContent: {
     flex: 1,
+    marginLeft: 16,
   },
-  premiumIndicator: {
-    backgroundColor: '#faf5ff',
-    paddingHorizontal: 6,
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  menuSubtitle: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 2,
+  },
+  menuRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  newBadge: {
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 8,
-    marginLeft: 8,
+    borderRadius: 10,
+    marginRight: 8,
   },
-  dangerZone: {
-    paddingHorizontal: 24,
-    paddingVertical: 32,
-    gap: 16,
+  newBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   logoutButton: {
-    backgroundColor: '#374151',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 16,
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginTop: 20,
+    padding: 16,
     borderRadius: 16,
-    gap: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF3B30',
   },
-  logoutButtonText: {
-    color: 'white',
+  logoutText: {
+    color: '#FF3B30',
     fontSize: 16,
     fontWeight: '600',
-  },
-  deleteButton: {
-    alignItems: 'center',
-  },
-  deleteButtonText: {
-    color: '#ef4444',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  appInfo: {
-    alignItems: 'center',
-    paddingBottom: 48,
-  },
-  appVersion: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginBottom: 4,
-  },
-  copyright: {
-    fontSize: 12,
-    color: '#9ca3af',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#f8f9fa',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    paddingHorizontal: 20,
     paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#e0e0e0',
+  },
+  modalCancel: {
+    fontSize: 16,
+    color: '#6b46c1',
   },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  modalSave: {
+    fontSize: 16,
+    color: '#6b46c1',
+    fontWeight: '600',
   },
   modalContent: {
     flex: 1,
   },
-  premiumHero: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 24,
+  avatarEditContainer: {
+    alignSelf: 'center',
+    marginVertical: 30,
   },
-  premiumIcon: {
-    width: 96,
-    height: 96,
-    backgroundColor: '#faf5ff',
-    borderRadius: 48,
+  avatarEdit: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+  },
+  avatarEditOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 60,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  avatarEditText: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 4,
+  },
+  formSection: {
+    paddingHorizontal: 20,
     marginBottom: 24,
   },
-  premiumTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111827',
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
     marginBottom: 8,
   },
-  premiumSubtitle: {
+  formInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-    lineHeight: 24,
+    color: '#333',
   },
-  tiersContainer: {
-    paddingHorizontal: 24,
-    gap: 16,
-    marginBottom: 32,
+  formTextArea: {
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
-  tierCard: {
-    backgroundColor: '#f9fafb',
+  chipContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
-    padding: 24,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
   },
-  tierCardSelected: {
+  chipActive: {
+    backgroundColor: '#6b46c1',
     borderColor: '#6b46c1',
-    backgroundColor: '#faf5ff',
   },
-  tierCardGold: {
-    backgroundColor: '#fef3c7',
-    position: 'relative',
+  chipText: {
+    fontSize: 14,
+    color: '#666',
   },
-  tierHeader: {
+  chipTextActive: {
+    color: '#fff',
+  },
+  settingsSection: {
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  settingsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+    paddingHorizontal: 20,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  settingTitle: {
+    fontSize: 16,
+    color: '#333',
+  },
+  settingDescription: {
+    fontSize: 13,
+    color: '#999',
+    marginTop: 2,
+  },
+  settingButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  settingButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  settingValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingValueText: {
+    fontSize: 14,
+    color: '#999',
+    marginRight: 8,
+  },
+  premiumCloseButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+  },
+  premiumHeader: {
+    alignItems: 'center',
+    paddingTop: 100,
+    paddingBottom: 40,
+    paddingHorizontal: 20,
+  },
+  premiumHeaderTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 16,
+  },
+  premiumHeaderSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  premiumContent: {
+    padding: 20,
+  },
+  currentPlanBox: {
+    backgroundColor: '#E8F5E9',
+    padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
     marginBottom: 24,
   },
-  tierName: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  tierPrice: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#6b46c1',
-  },
-  tierPeriod: {
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  tierSaving: {
+  currentPlanTitle: {
     fontSize: 14,
-    color: '#10b981',
-    fontWeight: '600',
+    color: '#4CAF50',
+  },
+  currentPlanName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
     marginTop: 4,
   },
-  tierFeatures: {
-    gap: 12,
+  managePlanButton: {
+    marginTop: 12,
   },
-  tierFeature: {
+  managePlanText: {
+    fontSize: 14,
+    color: '#4CAF50',
+    textDecorationLine: 'underline',
+  },
+  benefitsSection: {
+    marginBottom: 32,
+  },
+  benefitsTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  benefitItem: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  tierFeatureText: {
-    fontSize: 14,
-    color: '#374151',
-    flex: 1,
+  benefitText: {
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 12,
   },
-  goldSpecialBox: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
+  plansSection: {
+    marginBottom: 32,
   },
-  goldSpecialText: {
-    fontSize: 14,
-    color: '#92400e',
-    fontStyle: 'italic',
-    textAlign: 'center',
+  plansTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  planCard: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#e0e0e0',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    position: 'relative',
+  },
+  planCardPopular: {
+    borderColor: '#6b46c1',
   },
   popularBadge: {
     position: 'absolute',
     top: -12,
-    right: 24,
+    right: 20,
     backgroundColor: '#6b46c1',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
   },
   popularBadgeText: {
-    color: 'white',
-    fontSize: 10,
+    color: '#fff',
+    fontSize: 11,
     fontWeight: 'bold',
   },
-  saveBadge: {
-    position: 'absolute',
-    top: -12,
-    right: 24,
-    backgroundColor: '#10b981',
-    paddingHorizontal: 16,
+  planName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  planPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 12,
+  },
+  planPrice: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#6b46c1',
+  },
+  planPeriod: {
+    fontSize: 16,
+    color: '#999',
+    marginLeft: 8,
+  },
+  planSavings: {
+    backgroundColor: '#FFF9E6',
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
-  },
-  saveBadgeText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  subscribeButton: {
-    backgroundColor: '#6b46c1',
-    marginHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: 'center',
+    borderRadius: 8,
+    alignSelf: 'flex-start',
     marginBottom: 16,
   },
-  subscribeButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  planSavingsText: {
+    fontSize: 14,
+    color: '#FF8C00',
+    fontWeight: '600',
   },
-  termsText: {
-    fontSize: 12,
-    color: '#9ca3af',
-    textAlign: 'center',
-    paddingHorizontal: 48,
-    marginBottom: 48,
+  planFeatures: {
+    marginBottom: 20,
+  },
+  planFeature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  planFeatureText: {
+    fontSize: 14,
+    color: '#666',
+    marginLeft: 8,
+  },
+  planButton: {
+    backgroundColor: '#f0f0f0',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  planButtonPopular: {
+    backgroundColor: '#6b46c1',
+  },
+  planButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  planButtonTextPopular: {
+    color: '#fff',
+  },
+  faqSection: {
+    marginBottom: 24,
+  },
+  faqTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 16,
+  },
+  faqItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  faqQuestion: {
+    fontSize: 16,
+    color: '#333',
+    flex: 1,
+  },
+  restoreButton: {
+    alignItems: 'center',
+    paddingVertical: 16,
+  },
+  restoreButtonText: {
+    fontSize: 14,
+    color: '#6b46c1',
+    textDecorationLine: 'underline',
   },
 });
+
+export default ProfileScreen;
