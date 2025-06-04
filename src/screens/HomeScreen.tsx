@@ -314,28 +314,21 @@ export function HomeScreen() {
   const renderHeader = () => (
     <Animated.View style={[{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
       <LinearGradient
-        colors={['#6b46c1', '#8b5cf6']}
+        colors={['#FFB6C1', '#FFC0CB']}  // Pastellpink statt Violett
         style={styles.header}
       >
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
             <Text style={styles.greeting}>{getGreeting()},</Text>
             <Text style={styles.userName}>{user?.name || 'Beauty Lover'}!</Text>
-            {weather && (
-              <View style={styles.weatherContainer}>
-                <Ionicons name="partly-sunny" size={16} color="rgba(255,255,255,0.8)" />
-                <Text style={styles.weatherText}>
-                  {weather.temp}°C • {weather.condition}
-                </Text>
-              </View>
-            )}
+            {/* Wetter-Container entfernt - keine Temperaturanzeige mehr */}
           </View>
           <TouchableOpacity 
             onPress={() => navigation.navigate('Profil' as never)}
             style={styles.avatarContainer}
           >
             <Image
-              source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=User&background=fff&color=6b46c1' }}
+              source={{ uri: user?.avatar || 'https://ui-avatars.com/api/?name=User&background=fff&color=FFB6C1' }}
               style={styles.avatar}
             />
             {premiumTier !== 'basic' && (
@@ -719,7 +712,7 @@ export function HomeScreen() {
             }],
           }}
         >
-          <Ionicons name="refresh" size={48} color="#6b46c1" />
+          <Ionicons name="refresh" size={48} color="#FFB6C1" />
         </Animated.View>
         <Text style={styles.loadingText}>Lade Ihre Beauty-Daten...</Text>
       </View>
@@ -735,7 +728,7 @@ export function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#6b46c1"
+            tintColor="#FFB6C1"
           />
         }
       >
@@ -772,7 +765,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 20,
     fontSize: 16,
-    color: '#6b46c1',
+    color: '#FFB6C1',
   },
   header: {
     paddingTop: Platform.OS === 'ios' ? 60 : 40,
@@ -875,7 +868,7 @@ const styles = StyleSheet.create({
   },
   sectionAction: {
     fontSize: 14,
-    color: '#6b46c1',
+    color: '#FFB6C1',
     fontWeight: '500',
   },
   routineContainer: {
