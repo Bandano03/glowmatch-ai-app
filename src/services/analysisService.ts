@@ -1,88 +1,101 @@
-// In src/services/analysisService.ts
+// src/services/analysisService.ts
 
-// Ersetzen Sie die getCacheKey Funktion:
-private static getCacheKey(imageBase64: string, type: AnalysisType): string {
-  // Erstelle einen sicheren Hash aus dem Bild für den Cache-Key
-  // Verwende nur alphanumerische Zeichen
-  const imageHash = imageBase64
-    .substring(0, 20)
-    .replace(/[^a-zA-Z0-9]/g, ''); // Entferne alle nicht-alphanumerischen Zeichen
-  
-  const timestamp = Date.now().toString();
-  return `analysis_${type}_${imageHash}_${timestamp}`;
-}
+import { OpenAIService } from './openAIService';
+import { FallbackAnalysisService } from './fallbackAnalysisService';
+import { 
+  SkinAnalysisResult, 
+  HairAnalysisResult, 
+  AnalysisType,
+  AnalysisResponse 
+} from '../types/analysis.types';
+import { ENV } from '../config/environment';
 
-// Alternative: Keine Cache-Verwendung (einfachste Lösung)
-// Kommentieren Sie einfach die Cache-Aufrufe aus:
+export class AnalysisService {
+  private static readonly CACHE_PREFIX = 'analysis_cache_';
+  private static readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 Stunden
 
-static async analyze(
-  imageBase64: string, 
-  type: AnalysisType,
-  useCache: boolean = true
-): Promise<AnalysisResponse> {
-  const timestamp = new Date();
+  // Hauptanalyse-Funktion mit Fallback
+  static async analyze(
+    imageBase64: string, 
+    type: AnalysisType,
+    useCache: boolean = true
+  ): Promise<AnalysisResponse> {
+    const timestamp = new Date();
 
-  try {
-    // Cache vorübergehend deaktiviert wegen SecureStore Issues
-    // if (useCache) {
-    //   const cached = await this.getCachedAnalysis(imageBase64, type);
-    //   if (cached) {
-    //     return {
-    //       success: true,
-    //       data: cached,
-    //       timestamp
-    //     };
-    //   }
-    // }
+    try {
+      // Cache temporär deaktiviert wegen SecureStore Issues
+      // TODO: AsyncStorage implementieren für Cache
 
-    // Prüfe ob wir online sind und API Key haben
-    const isOnline = await this.checkOnlineStatus();
-    const hasAPIKey = !!ENV.OPENAI_API_KEY && ENV.OPENAI_API_KEY !== 'sk-proj-IhrOpenAIKeyHier';
+      // Prüfe ob wir online sind und API Key haben
+      const isOnline = await this.checkOnlineStatus();
+      const hasAPIKey = !!ENV.OPENAI_API_KEY && ENV.OPENAI_API_KEY !== 'sk-proj-IhrOpenAIKeyHier';
 
-    let result: SkinAnalysisResult | HairAnalysisResult;
+      let result: SkinAnalysisResult | HairAnalysisResult;
 
-    if (isOnline && hasAPIKey) {
-      // Echte API-Analyse
-      console.log('🔄 Führe echte KI-Analyse durch...');
-      result = type === 'skin' 
-        ? await OpenAIService.analyzeSkin(imageBase64)
-        : await OpenAIService.analyzeHair(imageBase64);
-    } else {
-      // Fallback auf Demo-Daten
-      console.log('📱 Verwende Demo-Daten (Offline-Modus)');
-      result = type === 'skin'
-        ? FallbackAnalysisService.getSkinAnalysisDemoWithVariation()
-        : FallbackAnalysisService.getHairAnalysisDemoWithVariation();
+      if (isOnline && hasAPIKey) {
+        // Echte API-Analyse
+        console.log('🔄 Führe echte KI-Analyse durch...');
+        result = type === 'skin' 
+          ? await OpenAIService.analyzeSkin(imageBase64)
+          : await OpenAIService.analyzeHair(imageBase64);
+      } else {
+        // Fallback auf Demo-Daten
+        console.log('📱 Verwende Demo-Daten (Offline-Modus)');
+        result = type === 'skin'
+          ? FallbackAnalysisService.getSkinAnalysisDemoWithVariation()
+          : FallbackAnalysisService.getHairAnalysisDemoWithVariation();
+      }
+
+      return {
+        success: true,
+        data: result,
+        timestamp
+      };
+
+    } catch (error) {
+      console.error('Analysis error:', error);
+      
+      // Bei Fehler: Fallback auf Demo-Daten
+      const fallbackResult = type === 'skin'
+        ? FallbackAnalysisService.getSkinAnalysisDemo()
+        : FallbackAnalysisService.getHairAnalysisDemo();
+
+      return {
+        success: true,
+        data: fallbackResult,
+        error: {
+          code: 'ANALYSIS_FALLBACK',
+          message: 'Analyse nicht verfügbar, Demo-Daten werden angezeigt',
+          details: error.message
+        },
+        timestamp
+      };
     }
+  }
 
-    // Cache vorübergehend deaktiviert
-    // if (useCache) {
-    //   await this.cacheAnalysis(imageBase64, type, result);
-    // }
+  // Online-Status prüfen
+  private static async checkOnlineStatus(): Promise<boolean> {
+    try {
+      const response = await fetch('https://api.openai.com/v1/models', {
+        method: 'HEAD',
+        headers: {
+          'Authorization': `Bearer ${ENV.OPENAI_API_KEY}`
+        }
+      });
+      return response.ok || response.status === 401; // 401 = API Key falsch, aber online
+    } catch {
+      return false;
+    }
+  }
 
-    return {
-      success: true,
-      data: result,
-      timestamp
-    };
+  // Alle Cache-Einträge löschen
+  static async clearCache(): Promise<void> {
+    // Placeholder für zukünftige Implementation
+    console.log('Cache clearing not implemented yet');
+  }
 
-  } catch (error) {
-    console.error('Analysis error:', error);
-    
-    // Bei Fehler: Fallback auf Demo-Daten
-    const fallbackResult = type === 'skin'
-      ? FallbackAnalysisService.getSkinAnalysisDemo()
-      : FallbackAnalysisService.getHairAnalysisDemo();
-
-    return {
-      success: true,
-      data: fallbackResult,
-      error: {
-        code: 'ANALYSIS_FALLBACK',
-        message: 'Analyse nicht verfügbar, Demo-Daten werden angezeigt',
-        details: error.message
-      },
-      timestamp
-    };
+  // API Verbindung testen
+  static async testConnection(): Promise<boolean> {
+    return OpenAIService.testAPIConnection();
   }
 }
