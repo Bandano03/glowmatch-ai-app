@@ -43,27 +43,6 @@ export function HomeScreen({ navigation }) {
     }
   ];
 
-  const latestAnalysis = analysisHistory[0];
-  const latestReport = weeklyReports[0];
-
-  const getTrendIcon = (trend) => {
-    switch (trend) {
-      case 'improving': return { name: 'trending-up', color: '#10b981' };
-      case 'declining': return { name: 'trending-down', color: '#ef4444' };
-      default: return { name: 'remove', color: '#6b7280' };
-    }
-  };
-
-  const getScoreColor = (score) => {
-    if (score >= 80) return '#10b981';
-    if (score >= 60) return '#f59e0b';
-    return '#ef4444';
-  };
-
-  const exportToPDF = () => {
-    alert('PDF-Export ist nur für Premium-Nutzer verfügbar!');
-  };
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
