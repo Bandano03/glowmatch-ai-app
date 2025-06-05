@@ -235,6 +235,21 @@ export function AnalysisScreen() {
     const skinResult = results as SkinAnalysisResult;
     const hairResult = results as HairAnalysisResult;
 
+      // FÜGEN SIE DIESE SICHERHEITSPRÜFUNGEN HINZU:
+  if (!skinResult || !hairResult) return null;
+  
+  // Sicherstellen dass alle erforderlichen Felder existieren
+  if (isSkinResult) {
+    skinResult.recommendations = skinResult.recommendations || { morning: [], evening: [], weekly: [] };
+    skinResult.ingredients = skinResult.ingredients || { recommended: [], avoid: [] };
+    skinResult.concerns = skinResult.concerns || [];
+  } else {
+    hairResult.recommendations = hairResult.recommendations || { products: [], treatments: [], styling: [] };
+    hairResult.ingredients = hairResult.ingredients || { recommended: [], avoid: [] };
+    hairResult.concerns = hairResult.concerns || [];
+  }
+
+
     return (
       <Modal
         visible={showResults}
