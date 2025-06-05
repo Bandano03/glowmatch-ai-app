@@ -1,6 +1,6 @@
 // src/screens/AdvancedAnalysisScreen.tsx
 
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,34 +19,47 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import * as Progress from 'react-native-progress';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
-import { FaceScanner } from '../components/FaceScanner';
+// Services & Types
 import { AdvancedAnalysisService } from '../services/advancedAnalysisService';
 import { UserContext } from '../../App';
 import { AdvancedAnalysisResult } from '../types/advancedAnalysis.types';
+
+// Hooks
+import { useCamera } from '../hooks/useCamera';
 
 const { width, height } = Dimensions.get('window');
 
 export function AdvancedAnalysisScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const { user, premiumTier } = useContext(UserContext);
+  const { selectImage } = useCamera();
   
   // States
-  const [showScanner, setShowScanner] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
   const [analysisStage, setAnalysisStage] = useState('');
   const [results, setResults] = useState<AdvancedAnalysisResult | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'overview' | 'details' | 'products' | 'recipes' | 'plan'>('overview');
+  const [capturedImages, setCapturedImages] = useState<string[]>([]);
   
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
-  const handleStartAnalysis = () => {
+  useEffect(() => {
+    // Überprüfe ob direkt gestartet werden soll
+    const params = route.params as any;
+    if (params?.startAnalysis) {
+      handleStartAnalysis();
+    }
+  }, [route.params]);
+
+  const handleStartAnalysis = async () => {
     if (premiumTier === 'basic') {
       Alert.alert(
         'Premium Feature',
@@ -59,11 +72,57 @@ export function AdvancedAnalysisScreen() {
       return;
     }
     
-    setShowScanner(true);
+    // Starte die Bildaufnahme
+    await captureMultipleImages();
   };
 
-  const handleScanComplete = async (images: string[]) => {
-    setShowScanner(false);
+  const captureMultipleImages = async () => {
+    try {
+      const images: string[] = [];
+      const requiredImages = 3; // Reduziert für bessere UX
+      
+      for (let i = 0; i < requiredImages; i++) {
+        Alert.alert(
+          `Bild ${i + 1} von ${requiredImages}`,
+          i === 0 ? 'Bitte fotografieren Sie Ihr Gesicht von vorne' :
+          i === 1 ? 'Bitte drehen Sie Ihr Gesicht nach links' :
+          'Bitte drehen Sie Ihr Gesicht nach rechts',
+          [
+            {
+              text: 'Foto aufnehmen',
+              onPress: async () => {
+                const result = await selectImage();
+                if (result.success && result.base64) {
+                  images.push(result.base64);
+                  
+                  if (images.length === requiredImages) {
+                    setCapturedImages(images);
+                    await performAdvancedAnalysis(images);
+                  }
+                } else {
+                  Alert.alert('Fehler', 'Bild konnte nicht aufgenommen werden');
+                  return;
+                }
+              }
+            },
+            {
+              text: 'Abbrechen',
+              style: 'cancel',
+              onPress: () => navigation.goBack()
+            }
+          ]
+        );
+        
+        // Warte auf Benutzeraktion
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (error) {
+      console.error('Fehler beim Aufnehmen der Bilder:', error);
+      Alert.alert('Fehler', 'Die Bildaufnahme wurde abgebrochen');
+    }
+  };
+
+  const performAdvancedAnalysis = async (images: string[]) => {
     setIsAnalyzing(true);
     setAnalysisProgress(0);
     
@@ -121,8 +180,12 @@ export function AdvancedAnalysisScreen() {
       }, 1000);
       
     } catch (error) {
-      console.error('Analysis error:', error);
-      Alert.alert('Fehler', 'Die Analyse konnte nicht durchgeführt werden.');
+      console.error('Advanced analysis error:', error);
+      Alert.alert(
+        'Analysefehler', 
+        'Die Analyse konnte nicht durchgeführt werden. Bitte versuchen Sie es erneut.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
       setIsAnalyzing(false);
     }
   };
@@ -168,7 +231,7 @@ export function AdvancedAnalysisScreen() {
             <View style={styles.analyzingInfo}>
               <Ionicons name="information-circle" size={16} color="#fff" />
               <Text style={styles.analyzingInfoText}>
-                Unsere KI analysiert 10 Bilder für maximale Genauigkeit
+                Unsere KI analysiert Ihre Bilder für maximale Genauigkeit
               </Text>
             </View>
             
@@ -196,7 +259,10 @@ export function AdvancedAnalysisScreen() {
           >
             <TouchableOpacity
               style={styles.closeButton}
-              onPress={() => setShowResults(false)}
+              onPress={() => {
+                setShowResults(false);
+                navigation.goBack();
+              }}
             >
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
@@ -267,57 +333,25 @@ export function AdvancedAnalysisScreen() {
           >
             <Text style={styles.scoreLabel}>Hautgesundheit</Text>
             <View style={styles.scoreCircle}>
-              <Text style={styles.scoreValue}>{results.skinAnalysis.healthScore}</Text>
+              <Text style={styles.scoreValue}>{results.skinAnalysis.overallScore}</Text>
               <Text style={styles.scoreMax}>/100</Text>
             </View>
             <Text style={styles.scoreDescription}>
-              Ihre Haut ist {results.skinAnalysis.healthScore >= 80 ? 'in ausgezeichnetem' : 
-                            results.skinAnalysis.healthScore >= 60 ? 'in gutem' : 'in verbesserungsfähigem'} Zustand
+              Ihre Haut ist in {results.skinAnalysis.overallScore >= 80 ? 'ausgezeichnetem' : 
+                               results.skinAnalysis.overallScore >= 60 ? 'gutem' : 'verbesserungsfähigem'} Zustand
             </Text>
           </LinearGradient>
         </View>
 
-        {/* Age Analysis */}
-        <View style={styles.ageCard}>
-          <Text style={styles.cardTitle}>Altersanalyse</Text>
-          <View style={styles.ageInfo}>
-            <View style={styles.ageItem}>
-              <Text style={styles.ageLabel}>Chronologisches Alter</Text>
-              <Text style={styles.ageValue}>{results.skinAnalysis.age}</Text>
-            </View>
-            <View style={styles.ageDivider} />
-            <View style={styles.ageItem}>
-              <Text style={styles.ageLabel}>Biologisches Hautalter</Text>
-              <Text style={[styles.ageValue, styles.ageBiological]}>
-                {results.skinAnalysis.biologicalAge}
-              </Text>
-            </View>
-          </View>
-          {results.skinAnalysis.biologicalAge < results.skinAnalysis.age && (
-            <View style={styles.ageSuccess}>
-              <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
-              <Text style={styles.ageSuccessText}>
-                Ihre Haut ist {results.skinAnalysis.age - results.skinAnalysis.biologicalAge} Jahre jünger!
-              </Text>
-            </View>
-          )}
-        </View>
-
         {/* Main Concerns */}
         <View style={styles.concernsCard}>
-          <Text style={styles.cardTitle}>Hauptprobleme</Text>
-          {results.skinAnalysis.concerns.primary.map((concern, index) => (
+          <Text style={styles.cardTitle}>Erkannte Probleme</Text>
+          {results.skinAnalysis.concerns.map((concern, index) => (
             <View key={index} style={styles.concernItem}>
               <View style={styles.concernIcon}>
                 <Ionicons name="alert-circle" size={24} color="#FF6B6B" />
               </View>
-              <View style={styles.concernContent}>
-                <Text style={styles.concernTitle}>{concern}</Text>
-                <TouchableOpacity style={styles.concernAction}>
-                  <Text style={styles.concernActionText}>Lösung ansehen</Text>
-                  <Ionicons name="arrow-forward" size={16} color="#6b46c1" />
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.concernTitle}>{concern}</Text>
             </View>
           ))}
         </View>
@@ -326,24 +360,9 @@ export function AdvancedAnalysisScreen() {
         <View style={styles.quickRecommendations}>
           <Text style={styles.cardTitle}>Sofortmaßnahmen</Text>
           {results.recommendations.immediate.map((action, index) => (
-            <TouchableOpacity key={index} style={styles.recommendationCard}>
-              <LinearGradient
-                colors={['#FFE5E5', '#FFF0F0']}
-                style={styles.recommendationGradient}
-              >
-                <View style={styles.recommendationHeader}>
-                  <Text style={styles.recommendationTitle}>{action.title}</Text>
-                  <View style={[styles.priorityBadge, styles[`priority${action.priority}`]]}>
-                    <Text style={styles.priorityText}>{action.priority.toUpperCase()}</Text>
-                  </View>
-                </View>
-                <Text style={styles.recommendationDescription}>{action.description}</Text>
-                <View style={styles.recommendationFooter}>
-                  <Text style={styles.recommendationDuration}>{action.duration}</Text>
-                  <Ionicons name="arrow-forward" size={20} color="#6b46c1" />
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
+            <View key={index} style={styles.recommendationCard}>
+              <Text style={styles.recommendationTitle}>{action}</Text>
+            </View>
           ))}
         </View>
       </View>
@@ -355,59 +374,20 @@ export function AdvancedAnalysisScreen() {
 
     return (
       <View style={styles.tabContent}>
-        {/* Metrics Grid */}
         <Text style={styles.sectionTitle}>Detaillierte Hautmetriken</Text>
         <View style={styles.metricsGrid}>
-          {Object.entries(results.skinAnalysis.metrics).map(([key, metric]) => (
+          {Object.entries(results.skinAnalysis.detailedMetrics).map(([key, value]) => (
             <View key={key} style={styles.metricCard}>
-              <Text style={styles.metricName}>{getMetricName(key)}</Text>
+              <Text style={styles.metricName}>{key}</Text>
               <Progress.Circle
                 size={80}
-                progress={metric.value / 100}
+                progress={value / 100}
                 showsText={true}
-                formatText={() => `${metric.value}`}
-                color={getMetricColor(metric.value)}
+                formatText={() => `${value}`}
+                color={value >= 70 ? '#4CAF50' : value >= 40 ? '#FFB923' : '#FF6B6B'}
                 borderWidth={0}
                 thickness={6}
               />
-              <View style={styles.metricTrend}>
-                <Ionicons 
-                  name={
-                    metric.trend === 'improving' ? 'trending-up' : 
-                    metric.trend === 'declining' ? 'trending-down' : 'remove'
-                  } 
-                  size={16} 
-                  color={
-                    metric.trend === 'improving' ? '#4CAF50' : 
-                    metric.trend === 'declining' ? '#FF6B6B' : '#999'
-                  } 
-                />
-                <Text style={[
-                  styles.metricTrendText,
-                  { color: metric.trend === 'improving' ? '#4CAF50' : 
-                           metric.trend === 'declining' ? '#FF6B6B' : '#999' }
-                ]}>
-                  {metric.trend === 'improving' ? 'Verbesserung' : 
-                   metric.trend === 'declining' ? 'Verschlechterung' : 'Stabil'}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-
-        {/* Environmental Factors */}
-        <Text style={styles.sectionTitle}>Umweltfaktoren</Text>
-        <View style={styles.environmentCard}>
-          {Object.entries(results.skinAnalysis.environmental).map(([key, value]) => (
-            <View key={key} style={styles.environmentItem}>
-              <View style={styles.environmentInfo}>
-                <Ionicons name={getEnvironmentIcon(key) as any} size={24} color="#666" />
-                <Text style={styles.environmentLabel}>{getEnvironmentName(key)}</Text>
-              </View>
-              <View style={styles.environmentBar}>
-                <View style={[styles.environmentFill, { width: `${value}%` }]} />
-              </View>
-              <Text style={styles.environmentValue}>{value}%</Text>
             </View>
           ))}
         </View>
@@ -421,86 +401,23 @@ export function AdvancedAnalysisScreen() {
     return (
       <View style={styles.tabContent}>
         <Text style={styles.sectionTitle}>Empfohlene Produkte</Text>
-        
-        {/* Essential Products */}
-        <View style={styles.productSection}>
-          <Text style={styles.productSectionTitle}>Essenzielle Produkte</Text>
-          {results.recommendations.products.essential.map((product) => (
-            <TouchableOpacity key={product.id} style={styles.productCard}>
-              <View style={styles.productImage}>
-                <Ionicons name="cube" size={40} color="#6b46c1" />
-              </View>
-              <View style={styles.productInfo}>
-                <Text style={styles.productBrand}>{product.brand}</Text>
-                <Text style={styles.productName}>{product.name}</Text>
-                <Text style={styles.productType}>{product.type}</Text>
-                <View style={styles.productIngredients}>
-                  {product.keyIngredients.slice(0, 3).map((ing, i) => (
-                    <View key={i} style={styles.ingredientChip}>
-                      <Text style={styles.ingredientText}>{ing}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-              <View style={styles.productRight}>
-                <Text style={styles.productPrice}>€{product.price}</Text>
-                <View style={styles.matchScore}>
-                  <Text style={styles.matchScoreText}>{product.matchScore}%</Text>
-                  <Text style={styles.matchLabel}>Match</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.shopButton}>
-          <LinearGradient
-            colors={['#6b46c1', '#8b5cf6']}
-            style={styles.shopButtonGradient}
-          >
-            <Ionicons name="cart" size={24} color="#fff" />
-            <Text style={styles.shopButtonText}>Alle Produkte ansehen</Text>
-          </LinearGradient>
-        </TouchableOpacity>
+        {results.recommendations.products.map((product, index) => (
+          <View key={index} style={styles.productCard}>
+            <View style={styles.productInfo}>
+              <Text style={styles.productCategory}>{product.category}</Text>
+              <Text style={styles.productName}>{product.name}</Text>
+              <Text style={styles.productReason}>{product.reason}</Text>
+            </View>
+          </View>
+        ))}
       </View>
     );
   };
 
   const renderRecipesTab = () => {
-    if (!results) return null;
-
     return (
       <View style={styles.tabContent}>
         <Text style={styles.sectionTitle}>DIY Beauty-Rezepte</Text>
-        
-        {results.recommendations.recipes.daily.map((recipe) => (
-          <TouchableOpacity key={recipe.id} style={styles.recipeCard}>
-            <View style={styles.recipeHeader}>
-              <Text style={styles.recipeName}>{recipe.name}</Text>
-              <View style={[styles.difficultyBadge, styles[`difficulty_${recipe.difficulty}`]]}>
-                <Text style={styles.difficultyText}>
-                  {recipe.difficulty === 'easy' ? 'Einfach' : 
-                   recipe.difficulty === 'medium' ? 'Mittel' : 'Schwer'}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.recipeInfo}>
-              <View style={styles.recipeTime}>
-                <Ionicons name="time" size={16} color="#666" />
-                <Text style={styles.recipeTimeText}>{recipe.prepTime} Min</Text>
-              </View>
-              <View style={styles.recipeMatch}>
-                <Text style={styles.recipeMatchText}>{recipe.matchScore}% Match</Text>
-              </View>
-            </View>
-            <View style={styles.recipeBenefits}>
-              {recipe.benefits.slice(0, 2).map((benefit, i) => (
-                <Text key={i} style={styles.recipeBenefit}>• {benefit}</Text>
-              ))}
-            </View>
-          </TouchableOpacity>
-        ))}
-        
         <TouchableOpacity 
           style={styles.viewAllButton}
           onPress={() => navigation.navigate('Rezepte' as never)}
@@ -519,131 +436,33 @@ export function AdvancedAnalysisScreen() {
       <View style={styles.tabContent}>
         <Text style={styles.sectionTitle}>Ihr persönlicher Pflegeplan</Text>
         
-        {/* Timeline */}
-        <View style={styles.timeline}>
-          {/* Immediate Actions */}
-          <View style={styles.timelineSection}>
-            <View style={styles.timelineHeader}>
-              <View style={styles.timelineDot} />
-              <Text style={styles.timelineTitle}>Sofort (24-48h)</Text>
-            </View>
-            {results.recommendations.immediate.map((action, index) => (
-              <View key={index} style={styles.timelineItem}>
-                <Text style={styles.timelineItemTitle}>{action.title}</Text>
-                <Text style={styles.timelineItemDescription}>{action.description}</Text>
-                <View style={styles.timelineSteps}>
-                  {action.steps.map((step, i) => (
-                    <Text key={i} style={styles.timelineStep}>{i + 1}. {step}</Text>
-                  ))}
-                </View>
-              </View>
-            ))}
+        {/* Immediate Actions */}
+        <View style={styles.timelineSection}>
+          <View style={styles.timelineHeader}>
+            <View style={styles.timelineDot} />
+            <Text style={styles.timelineTitle}>Sofort</Text>
           </View>
-
-          {/* Short Term */}
-          <View style={styles.timelineSection}>
-            <View style={styles.timelineHeader}>
-              <View style={[styles.timelineDot, { backgroundColor: '#FFB923' }]} />
-              <Text style={styles.timelineTitle}>Kurzfristig (2 Wochen)</Text>
+          {results.recommendations.immediate.map((action, index) => (
+            <View key={index} style={styles.timelineItem}>
+              <Text style={styles.timelineItemTitle}>{action}</Text>
             </View>
-            {results.recommendations.shortTerm.map((action, index) => (
-              <View key={index} style={styles.timelineItem}>
-                <Text style={styles.timelineItemTitle}>{action.title}</Text>
-                <Text style={styles.timelineItemDescription}>{action.description}</Text>
-              </View>
-            ))}
-          </View>
-
-          {/* Long Term */}
-          <View style={styles.timelineSection}>
-            <View style={styles.timelineHeader}>
-              <View style={[styles.timelineDot, { backgroundColor: '#4ECDC4' }]} />
-              <Text style={styles.timelineTitle}>Langfristig (3 Monate)</Text>
-            </View>
-            {results.recommendations.longTerm.map((action, index) => (
-              <View key={index} style={styles.timelineItem}>
-                <Text style={styles.timelineItemTitle}>{action.title}</Text>
-                <Text style={styles.timelineItemDescription}>{action.description}</Text>
-              </View>
-            ))}
-          </View>
+          ))}
         </View>
 
-        {/* Lifestyle Recommendations */}
-        <View style={styles.lifestyleSection}>
-          <Text style={styles.sectionTitle}>Lifestyle-Empfehlungen</Text>
-          
-          <View style={styles.lifestyleGrid}>
-            <View style={styles.lifestyleCard}>
-              <Ionicons name="nutrition" size={32} color="#4CAF50" />
-              <Text style={styles.lifestyleTitle}>Ernährung</Text>
-              {results.recommendations.lifestyle.diet.slice(0, 3).map((item, i) => (
-                <Text key={i} style={styles.lifestyleItem}>• {item}</Text>
-              ))}
-            </View>
-
-            <View style={styles.lifestyleCard}>
-              <Ionicons name="medical" size={32} color="#FF6B6B" />
-              <Text style={styles.lifestyleTitle}>Supplements</Text>
-              {results.recommendations.lifestyle.supplements.slice(0, 3).map((item, i) => (
-                <Text key={i} style={styles.lifestyleItem}>• {item}</Text>
-              ))}
-            </View>
+        {/* Long Term */}
+        <View style={styles.timelineSection}>
+          <View style={styles.timelineHeader}>
+            <View style={[styles.timelineDot, { backgroundColor: '#4ECDC4' }]} />
+            <Text style={styles.timelineTitle}>Langfristig</Text>
           </View>
+          {results.recommendations.longTerm.map((action, index) => (
+            <View key={index} style={styles.timelineItem}>
+              <Text style={styles.timelineItemTitle}>{action}</Text>
+            </View>
+          ))}
         </View>
-
-        {/* Save Plan Button */}
-        <TouchableOpacity style={styles.savePlanButton}>
-          <LinearGradient
-            colors={['#6b46c1', '#8b5cf6']}
-            style={styles.savePlanGradient}
-          >
-            <Ionicons name="download" size={24} color="#fff" />
-            <Text style={styles.savePlanText}>Plan speichern</Text>
-          </LinearGradient>
-        </TouchableOpacity>
       </View>
     );
-  };
-
-  // Helper functions
-  const getMetricName = (key: string): string => {
-    const names: Record<string, string> = {
-      hydration: 'Feuchtigkeit',
-      elasticity: 'Elastizität',
-      firmness: 'Festigkeit',
-      radiance: 'Ausstrahlung',
-      evenness: 'Ebenmäßigkeit',
-      poreSize: 'Porengröße',
-      oilBalance: 'Öl-Balance',
-    };
-    return names[key] || key;
-  };
-
-  const getMetricColor = (value: number): string => {
-    if (value >= 80) return '#4CAF50';
-    if (value >= 60) return '#FFB923';
-    return '#FF6B6B';
-  };
-
-  const getEnvironmentIcon = (key: string): string => {
-    const icons: Record<string, string> = {
-      uvDamage: 'sunny',
-      pollutionImpact: 'cloud',
-      stressLevel: 'pulse',
-      dehydration: 'water',
-    };
-    return icons[key] || 'help';
-  };
-
-  const getEnvironmentName = (key: string): string => {
-    const names: Record<string, string> = {
-      uvDamage: 'UV-Schäden',
-      pollutionImpact: 'Umweltverschmutzung',
-      stressLevel: 'Stress-Level',
-      dehydration: 'Dehydration',
-    };
-    return names[key] || key;
   };
 
   return (
@@ -671,13 +490,13 @@ export function AdvancedAnalysisScreen() {
           <Ionicons name="sparkles" size={48} color="#6b46c1" />
           <Text style={styles.introTitle}>Next-Level Hautanalyse</Text>
           <Text style={styles.introDescription}>
-            Unsere fortschrittliche KI scannt Ihr Gesicht aus mehreren Winkeln 
+            Unsere fortschrittliche KI analysiert Ihr Gesicht aus mehreren Winkeln 
             und erstellt eine umfassende Analyse mit personalisierten Empfehlungen.
           </Text>
           
           <View style={styles.features}>
             {[
-              '10 hochauflösende Scans',
+              'Mehrwinkel-Analyse',
               'Tiefenanalyse aller Hautschichten',
               'Personalisierte Produktempfehlungen',
               'Maßgeschneiderter Pflegeplan',
@@ -701,7 +520,7 @@ export function AdvancedAnalysisScreen() {
           >
             <Ionicons name="scan" size={32} color="#fff" />
             <Text style={styles.startButtonText}>Analyse starten</Text>
-            <Text style={styles.startButtonSubtext}>Dauert etwa 1 Minute</Text>
+            <Text style={styles.startButtonSubtext}>3 Fotos werden aufgenommen</Text>
           </LinearGradient>
         </TouchableOpacity>
 
@@ -720,24 +539,6 @@ export function AdvancedAnalysisScreen() {
           </View>
         </View>
       </ScrollView>
-
-      {/* Scanner Modal */}
-      <Modal
-        visible={showScanner}
-        animationType="slide"
-        presentationStyle="fullScreen"
-      >
-        <FaceScanner
-          onScanComplete={handleScanComplete}
-          onProgress={(progress) => console.log('Scan progress:', progress)}
-        />
-        <TouchableOpacity
-          style={styles.cancelScanButton}
-          onPress={() => setShowScanner(false)}
-        >
-          <Text style={styles.cancelScanText}>Abbrechen</Text>
-        </TouchableOpacity>
-      </Modal>
 
       {renderAnalyzingModal()}
       {renderResultsModal()}
@@ -865,20 +666,6 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     marginTop: 4,
-  },
-  cancelScanButton: {
-    position: 'absolute',
-    bottom: 50,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  cancelScanText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   analyzingOverlay: {
     flex: 1,
@@ -1026,7 +813,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     textAlign: 'center',
   },
-  ageCard: {
+  concernsCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 20,
@@ -1038,157 +825,48 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 16,
   },
-  ageInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
-  ageItem: {
-    alignItems: 'center',
-  },
-  ageLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  ageValue: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  ageBiological: {
-    color: '#4CAF50',
-  },
-  ageDivider: {
-    width: 1,
-    height: 60,
-    backgroundColor: '#e0e0e0',
-  },
-  ageSuccess: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
-  },
-  ageSuccessText: {
-    fontSize: 16,
-    color: '#4CAF50',
-    marginLeft: 8,
-    fontWeight: '600',
-  },
-  concernsCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-  },
   concernItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
   },
   concernIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFE5E5',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  concernContent: {
-    flex: 1,
-    marginLeft: 16,
+    marginRight: 16,
   },
   concernTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#333',
-    marginBottom: 4,
-  },
-  concernAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  concernActionText: {
-    fontSize: 14,
-    color: '#6b46c1',
-    marginRight: 4,
+    flex: 1,
   },
   quickRecommendations: {
     marginBottom: 20,
   },
   recommendationCard: {
-    marginBottom: 16,
+    backgroundColor: '#fff',
     borderRadius: 16,
-    overflow: 'hidden',
-  },
-  recommendationGradient: {
-    padding: 20,
-  },
-  recommendationHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    padding: 16,
     marginBottom: 12,
   },
   recommendationTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
     color: '#333',
-    flex: 1,
-  },
-  priorityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  priorityhigh: {
-    backgroundColor: '#FF3B30',
-  },
-  prioritymedium: {
-    backgroundColor: '#FFB923',
-  },
-  prioritylow: {
-    backgroundColor: '#4CAF50',
-  },
-  priorityText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  recommendationDescription: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 12,
-  },
-  recommendationFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  recommendationDuration: {
-    fontSize: 14,
-    color: '#999',
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#333',
     marginBottom: 16,
-    marginTop: 8,
   },
   metricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 24,
   },
   metricCard: {
     backgroundColor: '#fff',
@@ -1202,85 +880,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginBottom: 8,
-  },
-  metricTrend: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  metricTrendText: {
-    fontSize: 11,
-    marginLeft: 4,
-  },
-  environmentCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-  },
-  environmentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  environmentInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  environmentLabel: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 12,
-  },
-  environmentBar: {
-    flex: 2,
-    height: 6,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 3,
-    marginHorizontal: 12,
-    overflow: 'hidden',
-  },
-  environmentFill: {
-    height: '100%',
-    backgroundColor: '#FFB923',
-    borderRadius: 3,
-  },
-  environmentValue: {
-    fontSize: 14,
-    color: '#666',
-    width: 40,
-    textAlign: 'right',
-  },
-  productSection: {
-    marginBottom: 24,
-  },
-  productSectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-    marginBottom: 12,
+    textTransform: 'capitalize',
   },
   productCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
-    flexDirection: 'row',
     marginBottom: 12,
   },
-  productImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   productInfo: {
-    flex: 1,
-    marginLeft: 16,
+    gap: 4,
   },
-  productBrand: {
+  productCategory: {
     fontSize: 12,
     color: '#999',
     textTransform: 'uppercase',
@@ -1289,131 +900,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
-    marginTop: 2,
   },
-  productType: {
-    fontSize: 12,
-    color: '#666',
-    marginTop: 2,
-  },
-  productIngredients: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-    gap: 4,
-  },
-  ingredientChip: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  ingredientText: {
-    fontSize: 10,
-    color: '#4CAF50',
-  },
-  productRight: {
-    alignItems: 'flex-end',
-  },
-  productPrice: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  matchScore: {
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  matchScoreText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#6b46c1',
-  },
-  matchLabel: {
-    fontSize: 10,
-    color: '#999',
-  },
-  shopButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: 8,
-  },
-  shopButtonGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-  },
-  shopButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  recipeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-  },
-  recipeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  recipeName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#333',
-    flex: 1,
-  },
-  difficultyBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  difficulty_easy: {
-    backgroundColor: '#E8F5E9',
-  },
-  difficulty_medium: {
-    backgroundColor: '#FFF3E0',
-  },
-  difficulty_hard: {
-    backgroundColor: '#FFEBEE',
-  },
-  difficultyText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#333',
-  },
-  recipeInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  recipeTime: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  recipeTimeText: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 4,
-  },
-  recipeMatch: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  recipeMatchText: {
-    fontSize: 14,
-    color: '#6b46c1',
-    fontWeight: '600',
-  },
-  recipeBenefits: {
-    gap: 4,
-  },
-  recipeBenefit: {
+  productReason: {
     fontSize: 14,
     color: '#666',
   },
@@ -1428,9 +916,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b46c1',
     fontWeight: '600',
-  },
-  timeline: {
-    marginBottom: 24,
   },
   timelineSection: {
     marginBottom: 24,
@@ -1455,73 +940,12 @@ const styles = StyleSheet.create({
   timelineItem: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
+    padding: 16,
     marginBottom: 12,
     marginLeft: 28,
   },
   timelineItemTitle: {
     fontSize: 16,
-    fontWeight: '600',
     color: '#333',
-    marginBottom: 8,
-  },
-  timelineItemDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  timelineSteps: {
-    gap: 6,
-  },
-  timelineStep: {
-    fontSize: 13,
-    color: '#666',
-    lineHeight: 20,
-  },
-  lifestyleSection: {
-    marginBottom: 24,
-  },
-  lifestyleGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  lifestyleCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-  },
-  lifestyleTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  lifestyleItem: {
-    fontSize: 12,
-    color: '#666',
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  savePlanButton: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginTop: 8,
-  },
-  savePlanGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 8,
-  },
-  savePlanText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
   },
 });
-
-export default AdvancedAnalysisScreen;
