@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Import all screens
@@ -147,9 +147,9 @@ export default function App() {
                 backgroundColor: 'white',
                 borderTopWidth: 1,
                 borderTopColor: '#e5e7eb',
-                paddingBottom: 5,
-                paddingTop: 5,
-                height: 60,
+                paddingBottom: Platform.OS === 'ios' ? 20 : 5,
+                paddingTop: 10,
+                height: Platform.OS === 'ios' ? 85 : 65,
               },
               headerShown: false,
             })}
