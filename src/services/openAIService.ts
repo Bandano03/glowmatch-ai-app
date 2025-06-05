@@ -8,16 +8,133 @@ import {
   AnalysisType 
 } from '../types/analysis.types';
 
-// OpenAI API Konfiguration
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 const MAX_RETRIES = 3;
-const RETRY_DELAY = 1000; // 1 Sekunde
+const RETRY_DELAY = 1000;
 
 export class OpenAIService {
   private static apiKey = ENV.OPENAI_API_KEY;
 
-  // Hilfsfunktion für API Calls mit Retry-Logic
-  private static async makeAPICall(messages: any[], maxTokens: number = 1000): Promise<any> {
+  // VERBESSERTER HAUTANALYSE PROMPT
+  private static readonly SKIN_PROMPT = `Du bist ein erfahrener Dermatologe mit 25 Jahren Erfahrung. 
+
+ANALYSIERE DIESES GESICHTSBILD SEHR DETAILLIERT:
+
+1. HAUTTYP BESTIMMUNG:
+   - Betrachte T-Zone (Stirn, Nase, Kinn) separat von Wangen
+   - Achte auf Porengröße und Sichtbarkeit
+   - Bewerte Ölproduktion vs. Trockenheit
+   - Bestimme: Normal/Trocken/Fettig/Mischhaut/Sensibel
+
+2. DETAILBEWERTUNG (0-100 Skala):
+   - Hydration: Wie gut durchfeuchtet ist die Haut?
+   - Öligkeit: Wie stark glänzt die Haut?
+   - Sensitivität: Sichtbare Rötungen oder Irritationen?
+
+3. TEXTUR ANALYSE:
+   - Poren: Feinporig/Großporig/Ungleichmäßig
+   - Glätte: Glatt/Uneben/Rau
+   - Unreinheiten: Mitesser, Pickel, Narben
+
+4. HAUTPROBLEME IDENTIFIZIEREN:
+   - Mindestens 2-4 spezifische Probleme benennen
+   - Z.B. "Trockenheit an den Wangen", "Glanz in der T-Zone"
+
+5. ALTERSSCHÄTZUNG:
+   - Bereich angeben: z.B. "25-30 Jahre"
+
+6. DETAILLIERTE EMPFEHLUNGEN:
+   - Morgenroutine: 4-6 konkrete Schritte
+   - Abendroutine: 4-6 konkrete Schritte  
+   - Wochenbehandlungen: 2-4 Treatments
+
+7. INHALTSSTOFFE:
+   - 4-6 empfohlene Inhaltsstoffe
+   - 3-4 zu vermeidende Inhaltsstoffe
+
+ANTWORTE NUR MIT DIESEM JSON-FORMAT:
+{
+  "skinType": "Hauttyp hier",
+  "hydration": Zahl_0_bis_100,
+  "oiliness": Zahl_0_bis_100,
+  "sensitivity": Zahl_0_bis_100,
+  "texture": "Textur hier",
+  "concerns": ["Problem 1", "Problem 2", "Problem 3"],
+  "ageEstimate": "Altersbereich",
+  "recommendations": {
+    "morning": ["Schritt 1", "Schritt 2", "Schritt 3", "Schritt 4"],
+    "evening": ["Schritt 1", "Schritt 2", "Schritt 3", "Schritt 4"],
+    "weekly": ["Treatment 1", "Treatment 2", "Treatment 3"]
+  },
+  "ingredients": {
+    "recommended": ["Inhaltsstoff 1", "Inhaltsstoff 2", "Inhaltsstoff 3", "Inhaltsstoff 4"],
+    "avoid": ["Meide 1", "Meide 2", "Meide 3"]
+  },
+  "confidence": Zahl_70_bis_95
+}`;
+
+  // VERBESSERTER HAARANALYSE PROMPT
+  private static readonly HAIR_PROMPT = `Du bist ein Haar-Experte und Trichologie-Spezialist.
+
+ANALYSIERE DIESES HAAR SEHR GENAU:
+
+1. HAARTYP BESTIMMUNG (André Walker System):
+   - Typ 1 (Gerade): 1A (sehr dünn), 1B (mittel), 1C (dick)
+   - Typ 2 (Wellig): 2A (leicht), 2B (mittel), 2C (stark)
+   - Typ 3 (Lockig): 3A (große Locken), 3B (mittlere), 3C (kleine)
+   - Typ 4 (Kraus): 4A (weich), 4B (drahtiger), 4C (sehr kraus)
+
+2. STRUKTUR EIGENSCHAFTEN:
+   - Struktur: Glatt/Wellig/Lockig/Kraus
+   - Dicke: Dünn/Normal/Dick
+   - Porosität: Niedrig/Normal/Hoch (erkennbar am Glanz)
+
+3. ZUSTAND BEWERTUNG (0-100):
+   - Schädigung: Spliss, Bruch, Trockenheit
+   - Gesundheit: Allgemeiner Zustand
+
+4. KOPFHAUT ANALYSE:
+   - Normal/Trocken/Fettig/Sensibel
+   - Sichtbare Probleme: Schuppen, Rötungen
+
+5. SICHTBARE PROBLEME:
+   - 2-4 spezifische Haarprobleme
+   - Z.B. "Spliss in den Spitzen", "Frizz bei Feuchtigkeit"
+
+6. FARBE BESCHREIBUNG:
+   - Natürliche Farbe oder Färbung erkennen
+
+7. EMPFEHLUNGEN:
+   - Produkte: 4-5 spezifische Produkttypen
+   - Treatments: 3-4 Behandlungen
+   - Styling: 4-5 Styling-Tipps
+
+8. INHALTSSTOFFE:
+   - Empfohlene und zu vermeidende Inhaltsstoffe
+
+ANTWORTE NUR MIT DIESEM JSON-FORMAT:
+{
+  "hairType": "2B",
+  "structure": "Wellig",
+  "thickness": "Normal", 
+  "porosity": "Normal",
+  "damage": Zahl_0_bis_100,
+  "scalp": "Normal",
+  "concerns": ["Problem 1", "Problem 2", "Problem 3"],
+  "color": "Farbbeschreibung",
+  "recommendations": {
+    "products": ["Produkt 1", "Produkt 2", "Produkt 3", "Produkt 4"],
+    "treatments": ["Treatment 1", "Treatment 2", "Treatment 3"],
+    "styling": ["Tipp 1", "Tipp 2", "Tipp 3", "Tipp 4"]
+  },
+  "ingredients": {
+    "recommended": ["Inhaltsstoff 1", "Inhaltsstoff 2", "Inhaltsstoff 3"],
+    "avoid": ["Meide 1", "Meide 2", "Meide 3"]
+  },
+  "confidence": Zahl_70_bis_95
+}`;
+
+  private static async makeAPICall(messages: any[], maxTokens: number = 1500): Promise<any> {
     let lastError: Error | null = null;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -29,17 +146,16 @@ export class OpenAIService {
             'Authorization': `Bearer ${this.apiKey}`
           },
           body: JSON.stringify({
-            model: 'gpt-4o-mini', // AKTUALISIERTES MODEL!
+            model: 'gpt-4o', // AKTUALISIERT auf neuestes Model
             messages: messages,
             max_tokens: maxTokens,
-            temperature: 0.3, // Niedrig für konsistente Ergebnisse
+            temperature: 0.2, // Niedriger für konsistentere Ergebnisse
           })
         });
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           
-          // Spezifische Fehlerbehandlung
           if (response.status === 401) {
             throw new Error('API Key ungültig. Bitte prüfen Sie Ihren OpenAI API Key.');
           } else if (response.status === 429) {
@@ -58,13 +174,11 @@ export class OpenAIService {
         lastError = error as Error;
         console.error(`API Versuch ${attempt + 1} fehlgeschlagen:`, error);
         
-        // Nicht erneut versuchen bei bestimmten Fehlern
         if (error.message.includes('API Key ungültig') || 
             error.message.includes('Rate Limit')) {
           throw error;
         }
 
-        // Warte vor erneutem Versuch
         if (attempt < MAX_RETRIES - 1) {
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
         }
@@ -74,50 +188,13 @@ export class OpenAIService {
     throw lastError || new Error('Unbekannter Fehler bei der API-Anfrage');
   }
 
-  // Hautanalyse
   static async analyzeSkin(imageBase64: string): Promise<SkinAnalysisResult> {
-    const prompt = `Du bist ein erfahrener Dermatologe mit 20 Jahren Erfahrung. Analysiere dieses Gesichtsbild sehr detailliert und professionell.
-
-WICHTIG: Antworte NUR mit einem validen JSON-Objekt, keine zusätzlichen Erklärungen.
-
-Analysiere folgende Aspekte:
-1. Hauttyp (Normal/Trocken/Fettig/Mischhaut/Sensibel)
-2. Hydratationslevel (0-100, wobei 100 = perfekt hydriert)
-3. Öligkeitsgrad (0-100, wobei 100 = sehr ölig)
-4. Sensitivität (0-100, wobei 100 = sehr sensibel)
-5. Hauttextur (Glatt/Uneben/Rau/Feinporig/Großporig)
-6. Sichtbare Hautprobleme (mindestens 2-3 spezifische Probleme)
-7. Geschätztes Alter der Person
-8. Detaillierte Produktempfehlungen für Morgen-, Abend- und Wochenroutine
-9. Spezifische Inhaltsstoffe die empfohlen werden und vermieden werden sollten
-
-Antworte im folgenden JSON-Format:
-{
-  "skinType": "Hauttyp",
-  "hydration": Zahl,
-  "oiliness": Zahl,
-  "sensitivity": Zahl,
-  "texture": "Textur",
-  "concerns": ["Problem1", "Problem2", "Problem3"],
-  "ageEstimate": "20-25",
-  "recommendations": {
-    "morning": ["Produkt/Schritt 1", "Produkt/Schritt 2", "Produkt/Schritt 3", "Produkt/Schritt 4"],
-    "evening": ["Produkt/Schritt 1", "Produkt/Schritt 2", "Produkt/Schritt 3", "Produkt/Schritt 4"],
-    "weekly": ["Treatment 1", "Treatment 2", "Treatment 3"]
-  },
-  "ingredients": {
-    "recommended": ["Inhaltsstoff1", "Inhaltsstoff2", "Inhaltsstoff3", "Inhaltsstoff4"],
-    "avoid": ["Inhaltsstoff1", "Inhaltsstoff2", "Inhaltsstoff3"]
-  },
-  "confidence": Zahl zwischen 0-100
-}`;
-
     try {
       const messages = [
         {
           role: 'user',
           content: [
-            { type: 'text', text: prompt },
+            { type: 'text', text: this.SKIN_PROMPT },
             {
               type: 'image_url',
               image_url: {
@@ -129,17 +206,14 @@ Antworte im folgenden JSON-Format:
         }
       ];
 
-      const response = await this.makeAPICall(messages, 1500);
+      const response = await this.makeAPICall(messages, 2000);
       
-      // JSON aus der Antwort extrahieren
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('Ungültiges Antwortformat von der KI');
       }
       
       const result = JSON.parse(jsonMatch[0]) as SkinAnalysisResult;
-      
-      // Validierung der Ergebnisse
       this.validateSkinAnalysis(result);
       
       return result;
@@ -149,51 +223,13 @@ Antworte im folgenden JSON-Format:
     }
   }
 
-  // Haaranalyse
   static async analyzeHair(imageBase64: string): Promise<HairAnalysisResult> {
-    const prompt = `Du bist ein professioneller Haar-Experte und Trichologe. Analysiere dieses Haarbild sehr detailliert.
-
-WICHTIG: Antworte NUR mit einem validen JSON-Objekt, keine zusätzlichen Erklärungen.
-
-Analysiere folgende Aspekte:
-1. Haartyp nach dem Hair Type System (1A-4C)
-2. Haarstruktur (Glatt/Wellig/Lockig/Kraus)
-3. Haardicke (Dünn/Normal/Dick)
-4. Porosität (Niedrig/Normal/Hoch)
-5. Schädigungsgrad (0-100, wobei 100 = stark geschädigt)
-6. Kopfhautzustand (Normal/Trocken/Fettig/Sensibel)
-7. Sichtbare Probleme (mindestens 2-3 spezifische Probleme)
-8. Haarfarbe (natürlich oder gefärbt)
-9. Detaillierte Empfehlungen für Produkte, Treatments und Styling
-
-Antworte im folgenden JSON-Format:
-{
-  "hairType": "2B",
-  "structure": "Wellig",
-  "thickness": "Normal",
-  "porosity": "Normal",
-  "damage": Zahl,
-  "scalp": "Normal",
-  "concerns": ["Problem1", "Problem2", "Problem3"],
-  "color": "Beschreibung der Haarfarbe",
-  "recommendations": {
-    "products": ["Produkt1", "Produkt2", "Produkt3", "Produkt4"],
-    "treatments": ["Treatment1", "Treatment2", "Treatment3"],
-    "styling": ["Tipp1", "Tipp2", "Tipp3"]
-  },
-  "ingredients": {
-    "recommended": ["Inhaltsstoff1", "Inhaltsstoff2", "Inhaltsstoff3", "Inhaltsstoff4"],
-    "avoid": ["Inhaltsstoff1", "Inhaltsstoff2", "Inhaltsstoff3"]
-  },
-  "confidence": Zahl zwischen 0-100
-}`;
-
     try {
       const messages = [
         {
           role: 'user',
           content: [
-            { type: 'text', text: prompt },
+            { type: 'text', text: this.HAIR_PROMPT },
             {
               type: 'image_url',
               image_url: {
@@ -205,17 +241,14 @@ Antworte im folgenden JSON-Format:
         }
       ];
 
-      const response = await this.makeAPICall(messages, 1500);
+      const response = await this.makeAPICall(messages, 2000);
       
-      // JSON aus der Antwort extrahieren
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
         throw new Error('Ungültiges Antwortformat von der KI');
       }
       
       const result = JSON.parse(jsonMatch[0]) as HairAnalysisResult;
-      
-      // Validierung der Ergebnisse
       this.validateHairAnalysis(result);
       
       return result;
@@ -225,7 +258,6 @@ Antworte im folgenden JSON-Format:
     }
   }
 
-  // Validierungsfunktionen bleiben gleich...
   private static validateSkinAnalysis(result: SkinAnalysisResult): void {
     const requiredFields = [
       'skinType', 'hydration', 'oiliness', 'sensitivity', 
@@ -239,7 +271,6 @@ Antworte im folgenden JSON-Format:
       }
     }
 
-    // Werte-Validierung
     if (result.hydration < 0 || result.hydration > 100) {
       throw new Error('Hydration muss zwischen 0 und 100 liegen');
     }
@@ -264,13 +295,11 @@ Antworte im folgenden JSON-Format:
       }
     }
 
-    // Werte-Validierung
     if (result.damage < 0 || result.damage > 100) {
       throw new Error('Damage muss zwischen 0 und 100 liegen');
     }
   }
 
-  // Test-Funktion
   static async testAPIConnection(): Promise<boolean> {
     try {
       const response = await fetch('https://api.openai.com/v1/models', {

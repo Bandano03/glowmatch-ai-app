@@ -1,3 +1,4 @@
+
 import React, { useContext, useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -414,7 +415,7 @@ export function HomeScreen() {
         title: 'Hautanalyse',
         subtitle: 'KI-gestützt',
         icon: 'scan',
-        color: ['#4ECDC4', '#44A08D'],
+        color: ['#B3E5D1', '#A8D8C1'],  // Pastell Mint
         onPress: () => navigation.navigate('Analyse' as never),
       },
       {
@@ -422,7 +423,7 @@ export function HomeScreen() {
         title: 'Haaranalyse',
         subtitle: 'Personalisiert',
         icon: 'cut',
-        color: ['#FFB923', '#FF6B6B'],
+        color: ['#FFD4A3', '#FFBF9B'],  // Pastell Pfirsich
         onPress: () => navigation.navigate('Analyse' as never),
       },
       {
@@ -430,7 +431,7 @@ export function HomeScreen() {
         title: 'DIY Rezepte',
         subtitle: `${premiumTier === 'basic' ? '3 kostenlos' : 'Alle freigeschaltet'}`,
         icon: 'flask',
-        color: ['#A8E6CF', '#7FD8BE'],
+        color: ['#E6E6FA', '#D8BFD8'],  // Pastell Lavendel
         onPress: () => navigation.navigate('Rezepte' as never),
       },
       {
@@ -438,7 +439,7 @@ export function HomeScreen() {
         title: 'Produkte',
         subtitle: 'Empfehlungen',
         icon: 'basket',
-        color: ['#C7CEEA', '#B2B7E1'],
+        color: ['#FFDAB9', '#FFE4B5'],  // Pastell Apricot
         onPress: () => navigation.navigate('Produkte' as never),
       },
     ];
@@ -479,11 +480,11 @@ export function HomeScreen() {
       <Animated.View style={[styles.section, { opacity: fadeAnim }]}>
         <View style={styles.tipCard}>
           <LinearGradient
-            colors={['#FFF9E6', '#FFE4B5']}
+            colors={['#FFF0E5', '#FFE4CC']}  // Pastell Creme
             style={styles.tipGradient}
           >
             <View style={styles.tipHeader}>
-              <Ionicons name={currentTip.icon as any} size={24} color="#FF8C00" />
+              <Ionicons name={currentTip.icon as any} size={24} color="#FFA07A" />
               <Text style={styles.tipTitle}>Tipp des Tages</Text>
               <View style={styles.tipBadge}>
                 <Text style={styles.tipBadgeText}>{currentTip.category.toUpperCase()}</Text>
@@ -493,7 +494,7 @@ export function HomeScreen() {
             <Text style={styles.tipContent}>{currentTip.content}</Text>
             {weather && getWeatherAdvice() && (
               <View style={styles.weatherAdvice}>
-                <Ionicons name="information-circle" size={16} color="#FF6347" />
+                <Ionicons name="information-circle" size={16} color="#F08080" />
                 <Text style={styles.weatherAdviceText}>{getWeatherAdvice()}</Text>
               </View>
             )}
@@ -601,7 +602,7 @@ export function HomeScreen() {
           activeOpacity={0.9}
         >
           <LinearGradient
-            colors={['#FFD700', '#FFA500']}
+            colors={['#F0E68C', '#FFFFE0']}  // Pastell Gelb
             style={styles.premiumGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
@@ -902,8 +903,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   routineCheckboxCompleted: {
-    backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    backgroundColor: '#98D8C8',  // Pastell Mint
+    borderColor: '#98D8C8',
   },
   routineTaskText: {
     flex: 1,

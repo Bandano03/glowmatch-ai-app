@@ -100,11 +100,11 @@ export function RecipesScreen() {
     try {
       // Load categories
       const categoriesData: Category[] = [
-        { id: 'all', name: 'Alle', icon: 'apps', color: ['#6b46c1', '#8b5cf6'] },
-        { id: 'face', name: 'Gesicht', icon: 'happy', color: ['#4ECDC4', '#44A08D'] },
-        { id: 'hair', name: 'Haare', icon: 'cut', color: ['#FFB923', '#FF6B6B'] },
-        { id: 'body', name: 'Körper', icon: 'body', color: ['#A8E6CF', '#7FD8BE'] },
-        { id: 'lips', name: 'Lippen', icon: 'heart', color: ['#FF6B9D', '#FEC8D8'] },
+        { id: 'all', name: 'Alle', icon: 'apps', color: ['#FFB6C1', '#FFC0CB'] },  // Pastellpink
+        { id: 'face', name: 'Gesicht', icon: 'happy', color: ['#B3E5D1', '#A8D8C1'] },  // Pastellmint
+        { id: 'hair', name: 'Haare', icon: 'cut', color: ['#FFD4A3', '#FFBF9B'] },  // Pastellpfirsich
+        { id: 'body', name: 'Körper', icon: 'body', color: ['#E6E6FA', '#D8BFD8'] },  // Pastelllavendel
+        { id: 'lips', name: 'Lippen', icon: 'heart', color: ['#FFDAB9', '#FFE4B5'] },  // Pastellapricot
       ];
       setCategories(categoriesData);
 
@@ -402,10 +402,10 @@ export function RecipesScreen() {
 
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case 'easy': return '#4CAF50';
-      case 'medium': return '#FFB923';
-      case 'hard': return '#FF6B6B';
-      default: return '#999';
+      case 'easy': return '#98D8C8';  // Pastellmint
+      case 'medium': return '#FFD4A3';  // Pastellpfirsich
+      case 'hard': return '#FFA07A';  // Pastellkoralle
+      default: return '#9A9A9A';
     }
   };
 
@@ -438,7 +438,7 @@ export function RecipesScreen() {
             <Ionicons 
               name={isFavorite ? "heart" : "heart-outline"} 
               size={24} 
-              color={isFavorite ? "#FF6B6B" : "#fff"} 
+              color={isFavorite ? "#FFA07A" : "#fff"} 
             />
           </TouchableOpacity>
           <View style={[styles.difficultyBadge, { backgroundColor: getDifficultyColor(item.difficulty) }]}>
@@ -454,15 +454,15 @@ export function RecipesScreen() {
           
           <View style={styles.recipeDetails}>
             <View style={styles.detailItem}>
-              <Ionicons name="time-outline" size={16} color="#666" />
+              <Ionicons name="time-outline" size={16} color="#7A7A7A" />
               <Text style={styles.detailText}>{item.time} Min</Text>
             </View>
             <View style={styles.detailItem}>
-              <Ionicons name="star" size={16} color="#FFD700" />
+              <Ionicons name="star" size={16} color="#F0E68C" />
               <Text style={styles.detailText}>{item.rating}</Text>
             </View>
             <View style={styles.detailItem}>
-              <Ionicons name="chatbubble-outline" size={16} color="#666" />
+              <Ionicons name="chatbubble-outline" size={16} color="#7A7A7A" />
               <Text style={styles.detailText}>{item.reviews}</Text>
             </View>
           </View>
@@ -538,12 +538,12 @@ export function RecipesScreen() {
               {/* Quick Info */}
               <View style={styles.quickInfo}>
                 <View style={styles.infoBox}>
-                  <Ionicons name="time" size={24} color="#6b46c1" />
+                  <Ionicons name="time" size={24} color="#FFB6C1" />
                   <Text style={styles.infoLabel}>Zeit</Text>
                   <Text style={styles.infoValue}>{selectedRecipe.time} Min</Text>
                 </View>
                 <View style={styles.infoBox}>
-                  <Ionicons name="speedometer" size={24} color="#FFB923" />
+                  <Ionicons name="speedometer" size={24} color="#FFD4A3" />
                   <Text style={styles.infoLabel}>Schwierigkeit</Text>
                   <Text style={styles.infoValue}>
                     {selectedRecipe.difficulty === 'easy' ? 'Einfach' : 
@@ -551,7 +551,7 @@ export function RecipesScreen() {
                   </Text>
                 </View>
                 <View style={styles.infoBox}>
-                  <Ionicons name="star" size={24} color="#FFD700" />
+                  <Ionicons name="star" size={24} color="#F0E68C" />
                   <Text style={styles.infoLabel}>Bewertung</Text>
                   <Text style={styles.infoValue}>{selectedRecipe.rating}/5</Text>
                 </View>
@@ -562,7 +562,7 @@ export function RecipesScreen() {
                 <Text style={styles.sectionTitle}>Vorteile</Text>
                 {selectedRecipe.benefits.map((benefit, index) => (
                   <View key={index} style={styles.benefitItem}>
-                    <Ionicons name="checkmark-circle" size={20} color="#4CAF50" />
+                    <Ionicons name="checkmark-circle" size={20} color="#98D8C8" />
                     <Text style={styles.benefitItemText}>{benefit}</Text>
                   </View>
                 ))}
@@ -599,7 +599,7 @@ export function RecipesScreen() {
                   <View style={styles.tipsContainer}>
                     {selectedRecipe.tips.map((tip, index) => (
                       <View key={index} style={styles.tipItem}>
-                        <Ionicons name="bulb" size={16} color="#FFB923" />
+                        <Ionicons name="bulb" size={16} color="#FFD4A3" />
                         <Text style={styles.tipText}>{tip}</Text>
                       </View>
                     ))}
@@ -614,7 +614,7 @@ export function RecipesScreen() {
                   <View style={styles.warningsContainer}>
                     {selectedRecipe.warnings.map((warning, index) => (
                       <View key={index} style={styles.warningItem}>
-                        <Ionicons name="warning" size={16} color="#FF6B6B" />
+                        <Ionicons name="warning" size={16} color="#FFA07A" />
                         <Text style={styles.warningText}>{warning}</Text>
                       </View>
                     ))}
@@ -648,7 +648,7 @@ export function RecipesScreen() {
           <View style={styles.filterModalHeader}>
             <Text style={styles.filterModalTitle}>Filter & Sortierung</Text>
             <TouchableOpacity onPress={() => setShowFilters(false)}>
-              <Ionicons name="close" size={24} color="#333" />
+              <Ionicons name="close" size={24} color="#4A4A4A" />
             </TouchableOpacity>
           </View>
 
@@ -718,7 +718,7 @@ export function RecipesScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6b46c1" />
+        <ActivityIndicator size="large" color="#FFB6C1" />
         <Text style={styles.loadingText}>Lade Rezepte...</Text>
       </View>
     );
@@ -728,7 +728,7 @@ export function RecipesScreen() {
     <View style={styles.container}>
       {/* Header */}
       <LinearGradient
-        colors={['#6b46c1', '#8b5cf6']}
+        colors={['#FFB6C1', '#FFC0CB']}
         style={styles.header}
       >
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
@@ -744,17 +744,17 @@ export function RecipesScreen() {
       {/* Search Bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={20} color="#999" />
+          <Ionicons name="search" size={20} color="#9A9A9A" />
           <TextInput
             style={styles.searchInput}
             placeholder="Rezepte oder Zutaten suchen..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholderTextColor="#999"
+            placeholderTextColor="#9A9A9A"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={20} color="#999" />
+              <Ionicons name="close-circle" size={20} color="#9A9A9A" />
             </TouchableOpacity>
           )}
         </View>
@@ -762,7 +762,7 @@ export function RecipesScreen() {
           style={styles.filterButton}
           onPress={() => setShowFilters(true)}
         >
-          <Ionicons name="filter" size={24} color="#6b46c1" />
+          <Ionicons name="filter" size={24} color="#FFB6C1" />
         </TouchableOpacity>
       </View>
 
@@ -786,13 +786,13 @@ export function RecipesScreen() {
             }}
           >
             <LinearGradient
-              colors={selectedCategory === category.id ? category.color : ['#f0f0f0', '#f0f0f0']}
+              colors={selectedCategory === category.id ? category.color : ['#F0E0E0', '#F0E0E0']}
               style={styles.categoryGradient}
             >
               <Ionicons 
                 name={category.icon as any} 
                 size={20} 
-                color={selectedCategory === category.id ? '#fff' : '#666'} 
+                color={selectedCategory === category.id ? '#fff' : '#7A7A7A'} 
               />
               <Text style={[
                 styles.categoryText,
@@ -816,7 +816,7 @@ export function RecipesScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="flask-outline" size={64} color="#ccc" />
+            <Ionicons name="flask-outline" size={64} color="#D8BFD8" />
             <Text style={styles.emptyText}>Keine Rezepte gefunden</Text>
             <Text style={styles.emptySubtext}>
               Versuchen Sie eine andere Suche oder Kategorie
@@ -834,7 +834,7 @@ export function RecipesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFF9F5',
   },
   loadingContainer: {
     flex: 1,
@@ -844,7 +844,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#6b46c1',
+    color: '#FFB6C1',
   },
   header: {
     paddingTop: 60,
@@ -875,15 +875,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#FFB6C1',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   searchInput: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
     marginLeft: 8,
     paddingVertical: 12,
   },
@@ -895,10 +895,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#FFB6C1',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   categoriesContainer: {
     maxHeight: 60,
@@ -914,10 +914,10 @@ const styles = StyleSheet.create({
   },
   categoryChipActive: {
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: '#FFB6C1',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   categoryGradient: {
     flexDirection: 'row',
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
   },
   categoryText: {
     fontSize: 14,
-    color: '#666',
+    color: '#7A7A7A',
     marginLeft: 8,
   },
   categoryTextActive: {
@@ -948,10 +948,10 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     overflow: 'hidden',
     elevation: 3,
-    shadowColor: '#000',
+    shadowColor: '#FFB6C1',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowRadius: 8,
   },
   recipeImageContainer: {
     position: 'relative',
@@ -1003,7 +1003,7 @@ const styles = StyleSheet.create({
   recipeTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 8,
     height: 40,
   },
@@ -1019,20 +1019,20 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 12,
-    color: '#666',
+    color: '#7A7A7A',
   },
   benefitsPreview: {
     gap: 4,
   },
   benefitChip: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#E8F9E8',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },
   benefitText: {
     fontSize: 11,
-    color: '#4CAF50',
+    color: '#98D8C8',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1041,17 +1041,17 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#999',
+    color: '#9A9A9A',
     marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
+    color: '#9A9A9A',
     marginTop: 8,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFF9F5',
   },
   modalImageContainer: {
     height: height * 0.4,
@@ -1110,23 +1110,23 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 24,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#FFB6C1',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   infoBox: {
     alignItems: 'center',
   },
   infoLabel: {
     fontSize: 12,
-    color: '#999',
+    color: '#9A9A9A',
     marginTop: 4,
   },
   infoValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginTop: 2,
   },
   section: {
@@ -1135,7 +1135,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 16,
   },
   benefitItem: {
@@ -1145,7 +1145,7 @@ const styles = StyleSheet.create({
   },
   benefitItemText: {
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
     marginLeft: 12,
     flex: 1,
   },
@@ -1159,12 +1159,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
     marginRight: 12,
   },
   ingredientText: {
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
   },
   instructionItem: {
     flexDirection: 'row',
@@ -1174,7 +1174,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
@@ -1187,11 +1187,11 @@ const styles = StyleSheet.create({
   instructionText: {
     flex: 1,
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
     lineHeight: 24,
   },
   tipsContainer: {
-    backgroundColor: '#FFF9E6',
+    backgroundColor: '#FFF0E5',
     borderRadius: 12,
     padding: 16,
   },
@@ -1201,12 +1201,12 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: 14,
-    color: '#666',
+    color: '#7A7A7A',
     marginLeft: 8,
     flex: 1,
   },
   warningsContainer: {
-    backgroundColor: '#FFEBEE',
+    backgroundColor: '#FFE8E8',
     borderRadius: 12,
     padding: 16,
   },
@@ -1216,12 +1216,12 @@ const styles = StyleSheet.create({
   },
   warningText: {
     fontSize: 14,
-    color: '#666',
+    color: '#7A7A7A',
     marginLeft: 8,
     flex: 1,
   },
   videoButton: {
-    backgroundColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1256,7 +1256,7 @@ const styles = StyleSheet.create({
   filterModalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#4A4A4A',
   },
   filterSection: {
     marginBottom: 24,
@@ -1264,7 +1264,7 @@ const styles = StyleSheet.create({
   filterSectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 12,
   },
   filterOptions: {
@@ -1277,23 +1277,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#F0E0E0',
     backgroundColor: '#fff',
   },
   filterOptionActive: {
-    backgroundColor: '#6b46c1',
-    borderColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
+    borderColor: '#FFB6C1',
   },
   filterOptionText: {
     fontSize: 14,
-    color: '#666',
+    color: '#7A7A7A',
   },
   filterOptionTextActive: {
     color: '#fff',
     fontWeight: '600',
   },
   applyFiltersButton: {
-    backgroundColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',

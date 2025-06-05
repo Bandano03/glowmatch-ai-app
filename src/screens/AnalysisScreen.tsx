@@ -33,6 +33,8 @@ import {
   HairAnalysisResult, 
   AnalysisType 
 } from '../types/analysis.types';
+import { GlassCard, ModernButton, FloatingCard } from '../components/GlassComponents';
+import { SkeletonLoader, AnalysisLoading } from '../components/LoadingComponents';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -184,47 +186,25 @@ export function AnalysisScreen() {
     }
   };
 
-  const renderAnalyzingModal = () => (
-    <Modal
-      visible={isAnalyzing}
-      animationType="fade"
-      transparent={true}
-    >
-      <View style={styles.analyzingOverlay}>
-        <BlurView intensity={90} style={styles.analyzingContainer}>
-          <View style={styles.analyzingContent}>
-            <Text style={styles.analyzingTitle}>
-              KI-Analyse läuft...
-            </Text>
-            <View style={styles.progressContainer}>
-              <Progress.Bar
-                progress={analysisProgress}
-                width={screenWidth * 0.7}
-                height={8}
-                color="#6b46c1"
-                borderWidth={0}
-                borderRadius={4}
-              />
-              <Text style={styles.progressText}>
-                {Math.round(analysisProgress * 100)}%
-              </Text>
-            </View>
-            <Text style={styles.analyzingSubtext}>
-              {analysisProgress < 0.3 && 'Bild wird verarbeitet...'}
-              {analysisProgress >= 0.3 && analysisProgress < 0.6 && 'KI analysiert Merkmale...'}
-              {analysisProgress >= 0.6 && analysisProgress < 0.9 && 'Erstelle Empfehlungen...'}
-              {analysisProgress >= 0.9 && 'Fast fertig...'}
-            </Text>
-            <ActivityIndicator
-              size="large"
-              color="#6b46c1"
-              style={{ marginTop: 20 }}
-            />
-          </View>
-        </BlurView>
-      </View>
-    </Modal>
-  );
+const renderAnalyzingModal = () => (
+  <Modal
+    visible={isAnalyzing}
+    animationType="fade"
+    transparent={true}
+  >
+    <View style={styles.analyzingOverlay}>
+      <AnalysisLoading
+        progress={analysisProgress}
+        message={
+          analysisProgress < 0.3 ? 'Bild wird verarbeitet...' :
+          analysisProgress >= 0.3 && analysisProgress < 0.6 ? 'KI analysiert Merkmale...' :
+          analysisProgress >= 0.6 && analysisProgress < 0.9 ? 'Erstelle Empfehlungen...' :
+          'Fast fertig...'
+        }
+      />
+    </View>
+  </Modal>
+);
 
   const renderResultsModal = () => {
     if (!results || !selectedType) return null;

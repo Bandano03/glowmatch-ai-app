@@ -214,7 +214,7 @@ export function ProfileScreen() {
           id: user?.id || '1',
           name: user?.name || 'Beauty Lover',
           email: user?.email || 'user@glowmatch.ai',
-          avatar: user?.avatar || 'https://ui-avatars.com/api/?name=User&background=6b46c1&color=fff',
+          avatar: user?.avatar || 'https://ui-avatars.com/api/?name=User&background=FFB6C1&color=fff',
           concerns: [],
           allergies: [],
           joinedDate: new Date(),
@@ -368,7 +368,7 @@ export function ProfileScreen() {
 
     return (
       <LinearGradient
-        colors={['#6b46c1', '#8b5cf6']}
+        colors={['#FFB6C1', '#FFC0CB']}  // Pastellpink
         style={styles.header}
       >
         <Animated.View 
@@ -392,7 +392,7 @@ export function ProfileScreen() {
                 <Ionicons 
                   name={premiumTier === 'gold' ? 'star' : premiumTier === 'silver' ? 'star-half' : 'star-outline'} 
                   size={16} 
-                  color="#FFD700" 
+                  color="#F0E68C"  // Pastellgelb
                 />
                 <Text style={styles.premiumText}>
                   {premiumTier === 'gold' ? 'Gold Member' : 
@@ -428,7 +428,7 @@ export function ProfileScreen() {
         title: 'Premium Upgrade',
         subtitle: premiumTier === 'basic' ? 'Alle Features freischalten' : 'Ihr Abo verwalten',
         icon: 'star',
-        color: '#FFD700',
+        color: '#F0E68C',  // Pastellgelb
         onPress: () => setShowPremiumModal(true),
         showBadge: premiumTier === 'basic',
       },
@@ -437,7 +437,7 @@ export function ProfileScreen() {
         title: 'Profil bearbeiten',
         subtitle: 'Persönliche Daten & Präferenzen',
         icon: 'person',
-        color: '#4ECDC4',
+        color: '#B3E5D1',  // Pastellmint
         onPress: () => setShowEditProfile(true),
       },
       {
@@ -445,7 +445,7 @@ export function ProfileScreen() {
         title: 'Einstellungen',
         subtitle: 'App-Einstellungen & Datenschutz',
         icon: 'settings',
-        color: '#6b46c1',
+        color: '#FFB6C1',  // Pastellpink
         onPress: () => setShowSettings(true),
       },
       {
@@ -453,7 +453,7 @@ export function ProfileScreen() {
         title: 'Meine Aktivitäten',
         subtitle: 'Analysen, Rezepte & Favoriten',
         icon: 'time',
-        color: '#FFB923',
+        color: '#FFD4A3',  // Pastellpfirsich
         onPress: () => navigation.navigate('Verlauf' as never),
       },
       {
@@ -461,7 +461,7 @@ export function ProfileScreen() {
         title: 'App teilen',
         subtitle: 'Freunde einladen & Prämien erhalten',
         icon: 'share-social',
-        color: '#FF6B6B',
+        color: '#FFA07A',  // Pastellkoralle
         onPress: () => {
           Share.share({
             message: 'Entdecke GlowMatch - Die KI Beauty App! 🌟\n\nDownload: https://glowmatch.ai/download',
@@ -474,7 +474,7 @@ export function ProfileScreen() {
         title: 'Hilfe & Support',
         subtitle: 'FAQ, Kontakt & Tutorials',
         icon: 'help-circle',
-        color: '#00BFA5',
+        color: '#98D8C8',  // Pastellmint
         onPress: () => Alert.alert('Support', 'support@glowmatch.ai'),
       },
       {
@@ -482,7 +482,7 @@ export function ProfileScreen() {
         title: 'Über GlowMatch',
         subtitle: 'Version 1.0.0',
         icon: 'information-circle',
-        color: '#9C27B0',
+        color: '#E6E6FA',  // Pastelllavendel
         onPress: () => Alert.alert('GlowMatch', 'Version 1.0.0\n\n© 2024 GlowMatch AI'),
       },
     ];
@@ -512,7 +512,7 @@ export function ProfileScreen() {
                   <Text style={styles.newBadgeText}>NEU</Text>
                 </View>
               )}
-              <Ionicons name="chevron-forward" size={20} color="#999" />
+              <Ionicons name="chevron-forward" size={20} color="#9A9A9A" />
             </View>
           </TouchableOpacity>
         ))}
@@ -699,7 +699,7 @@ export function ProfileScreen() {
       <View style={styles.modalContainer}>
         <View style={styles.modalHeader}>
           <TouchableOpacity onPress={() => setShowSettings(false)}>
-            <Ionicons name="close" size={28} color="#333" />
+            <Ionicons name="close" size={28} color="#4A4A4A" />
           </TouchableOpacity>
           <Text style={styles.modalTitle}>Einstellungen</Text>
           <View style={{ width: 28 }} />
@@ -725,7 +725,7 @@ export function ProfileScreen() {
                   };
                   saveSettings(newSettings);
                 }}
-                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                trackColor={{ false: '#F0E0E0', true: '#FFB6C1' }}
                 thumbColor="#fff"
               />
             </View>
@@ -744,7 +744,7 @@ export function ProfileScreen() {
                   };
                   saveSettings(newSettings);
                 }}
-                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                trackColor={{ false: '#F0E0E0', true: '#FFB6C1' }}
                 thumbColor="#fff"
               />
             </View>
@@ -763,7 +763,7 @@ export function ProfileScreen() {
                   };
                   saveSettings(newSettings);
                 }}
-                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                trackColor={{ false: '#F0E0E0', true: '#FFB6C1' }}
                 thumbColor="#fff"
               />
             </View>
@@ -781,7 +781,7 @@ export function ProfileScreen() {
               <Switch
                 value={settings.privacy.biometricAuth}
                 onValueChange={handleBiometricToggle}
-                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                trackColor={{ false: '#F0E0E0', true: '#FFB6C1' }}
                 thumbColor="#fff"
                 disabled={!biometricAvailable}
               />
@@ -801,19 +801,19 @@ export function ProfileScreen() {
                   };
                   saveSettings(newSettings);
                 }}
-                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                trackColor={{ false: '#F0E0E0', true: '#FFB6C1' }}
                 thumbColor="#fff"
               />
             </View>
 
             <TouchableOpacity style={styles.settingButton}>
               <Text style={styles.settingButtonText}>Datenschutzerklärung</Text>
-              <Ionicons name="open-outline" size={16} color="#6b46c1" />
+              <Ionicons name="open-outline" size={16} color="#FFB6C1" />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.settingButton}>
               <Text style={styles.settingButtonText}>Nutzungsbedingungen</Text>
-              <Ionicons name="open-outline" size={16} color="#6b46c1" />
+              <Ionicons name="open-outline" size={16} color="#FFB6C1" />
             </TouchableOpacity>
           </View>
 
@@ -835,7 +835,7 @@ export function ProfileScreen() {
                   };
                   saveSettings(newSettings);
                 }}
-                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                trackColor={{ false: '#F0E0E0', true: '#FFB6C1' }}
                 thumbColor="#fff"
               />
             </View>
@@ -844,7 +844,7 @@ export function ProfileScreen() {
               <Text style={styles.settingButtonText}>Sprache ändern</Text>
               <View style={styles.settingValue}>
                 <Text style={styles.settingValueText}>Deutsch</Text>
-                <Ionicons name="chevron-forward" size={16} color="#999" />
+                <Ionicons name="chevron-forward" size={16} color="#9A9A9A" />
               </View>
             </TouchableOpacity>
 
@@ -855,7 +855,7 @@ export function ProfileScreen() {
                   {settings.appearance.fontSize === 'small' ? 'Klein' :
                    settings.appearance.fontSize === 'large' ? 'Groß' : 'Mittel'}
                 </Text>
-                <Ionicons name="chevron-forward" size={16} color="#999" />
+                <Ionicons name="chevron-forward" size={16} color="#9A9A9A" />
               </View>
             </TouchableOpacity>
           </View>
@@ -881,14 +881,14 @@ export function ProfileScreen() {
                   };
                   saveSettings(newSettings);
                 }}
-                trackColor={{ false: '#ddd', true: '#6b46c1' }}
+                trackColor={{ false: '#F0E0E0', true: '#FFB6C1' }}
                 thumbColor="#fff"
               />
             </View>
 
             <TouchableOpacity style={styles.settingButton} onPress={handleExportData}>
               <Text style={styles.settingButtonText}>Daten exportieren</Text>
-              <Ionicons name="download-outline" size={16} color="#6b46c1" />
+              <Ionicons name="download-outline" size={16} color="#FFB6C1" />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.settingButton}>
@@ -907,18 +907,18 @@ export function ProfileScreen() {
                 { text: 'Abmelden', onPress: logout }
               ]);
             }}>
-              <Text style={[styles.settingButtonText, { color: '#FF6B6B' }]}>Abmelden</Text>
-              <Ionicons name="log-out-outline" size={16} color="#FF6B6B" />
+              <Text style={[styles.settingButtonText, { color: '#FFA07A' }]}>Abmelden</Text>
+              <Ionicons name="log-out-outline" size={16} color="#FFA07A" />
             </TouchableOpacity>
 
             <TouchableOpacity 
               style={styles.settingButton} 
               onPress={() => setShowDeleteAccount(true)}
             >
-              <Text style={[styles.settingButtonText, { color: '#FF3B30' }]}>
+              <Text style={[styles.settingButtonText, { color: '#F08080' }]}>
                 Account löschen
               </Text>
-              <Ionicons name="trash-outline" size={16} color="#FF3B30" />
+              <Ionicons name="trash-outline" size={16} color="#F08080" />
             </TouchableOpacity>
           </View>
 
@@ -941,11 +941,11 @@ export function ProfileScreen() {
             style={styles.premiumCloseButton}
             onPress={() => setShowPremiumModal(false)}
           >
-            <Ionicons name="close" size={28} color="#333" />
+            <Ionicons name="close" size={28} color="#4A4A4A" />
           </TouchableOpacity>
 
           <LinearGradient
-            colors={['#FFD700', '#FFA500']}
+            colors={['#F0E68C', '#FFFFE0']}  // Pastellgelb
             style={styles.premiumHeader}
           >
             <Ionicons name="star" size={48} color="#fff" />
@@ -981,7 +981,7 @@ export function ProfileScreen() {
                 { icon: 'gift', text: 'Monatliche Überraschungen (Gold)' },
               ].map((benefit, index) => (
                 <View key={index} style={styles.benefitItem}>
-                  <Ionicons name={benefit.icon as any} size={24} color="#6b46c1" />
+                  <Ionicons name={benefit.icon as any} size={24} color="#FFB6C1" />
                   <Text style={styles.benefitText}>{benefit.text}</Text>
                 </View>
               ))}
@@ -1018,7 +1018,7 @@ export function ProfileScreen() {
                   <View style={styles.planFeatures}>
                     {plan.features.map((feature, index) => (
                       <View key={index} style={styles.planFeature}>
-                        <Ionicons name="checkmark-circle" size={16} color="#4CAF50" />
+                        <Ionicons name="checkmark-circle" size={16} color="#98D8C8" />
                         <Text style={styles.planFeatureText}>{feature}</Text>
                       </View>
                     ))}
@@ -1038,15 +1038,15 @@ export function ProfileScreen() {
               <Text style={styles.faqTitle}>Häufige Fragen</Text>
               <TouchableOpacity style={styles.faqItem}>
                 <Text style={styles.faqQuestion}>Kann ich jederzeit kündigen?</Text>
-                <Ionicons name="chevron-down" size={20} color="#999" />
+                <Ionicons name="chevron-down" size={20} color="#9A9A9A" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.faqItem}>
                 <Text style={styles.faqQuestion}>Gibt es eine Testphase?</Text>
-                <Ionicons name="chevron-down" size={20} color="#999" />
+                <Ionicons name="chevron-down" size={20} color="#9A9A9A" />
               </TouchableOpacity>
               <TouchableOpacity style={styles.faqItem}>
                 <Text style={styles.faqQuestion}>Was ist im Gold-Paket enthalten?</Text>
-                <Ionicons name="chevron-down" size={20} color="#999" />
+                <Ionicons name="chevron-down" size={20} color="#9A9A9A" />
               </TouchableOpacity>
             </View>
 
@@ -1063,7 +1063,7 @@ export function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6b46c1" />
+        <ActivityIndicator size="large" color="#FFB6C1" />
       </View>
     );
   }
@@ -1096,7 +1096,7 @@ export function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFF9F5',
   },
   loadingContainer: {
     flex: 1,
@@ -1127,7 +1127,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
     width: 28,
     height: 28,
     borderRadius: 14,
@@ -1193,17 +1193,17 @@ const styles = StyleSheet.create({
     marginTop: 20,
     borderRadius: 16,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: '#FFB6C1',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F0E0E0',
   },
   menuItemLast: {
     borderBottomWidth: 0,
@@ -1222,11 +1222,11 @@ const styles = StyleSheet.create({
   menuTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
   },
   menuSubtitle: {
     fontSize: 13,
-    color: '#999',
+    color: '#9A9A9A',
     marginTop: 2,
   },
   menuRight: {
@@ -1234,7 +1234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   newBadge: {
-    backgroundColor: '#FF3B30',
+    backgroundColor: '#F08080',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
@@ -1253,16 +1253,16 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#FF3B30',
+    borderColor: '#F08080',
   },
   logoutText: {
-    color: '#FF3B30',
+    color: '#F08080',
     fontSize: 16,
     fontWeight: '600',
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#FFF9F5',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1273,20 +1273,20 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#F0E0E0',
   },
   modalCancel: {
     fontSize: 16,
-    color: '#6b46c1',
+    color: '#FFB6C1',
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
   },
   modalSave: {
     fontSize: 16,
-    color: '#6b46c1',
+    color: '#FFB6C1',
     fontWeight: '600',
   },
   modalContent: {
@@ -1320,18 +1320,18 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 8,
   },
   formInput: {
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#F0E0E0',
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
   },
   formTextArea: {
     minHeight: 80,
@@ -1347,16 +1347,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#F0E0E0',
     backgroundColor: '#fff',
   },
   chipActive: {
-    backgroundColor: '#6b46c1',
-    borderColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
+    borderColor: '#FFB6C1',
   },
   chipText: {
     fontSize: 14,
-    color: '#666',
+    color: '#7A7A7A',
   },
   chipTextActive: {
     color: '#fff',
@@ -1364,12 +1364,12 @@ const styles = StyleSheet.create({
   settingsSection: {
     paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F0E0E0',
   },
   settingsSectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 16,
     paddingHorizontal: 20,
   },
@@ -1386,11 +1386,11 @@ const styles = StyleSheet.create({
   },
   settingTitle: {
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
   },
   settingDescription: {
     fontSize: 13,
-    color: '#999',
+    color: '#9A9A9A',
     marginTop: 2,
   },
   settingButton: {
@@ -1402,7 +1402,7 @@ const styles = StyleSheet.create({
   },
   settingButtonText: {
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
   },
   settingValue: {
     flexDirection: 'row',
@@ -1410,7 +1410,7 @@ const styles = StyleSheet.create({
   },
   settingValueText: {
     fontSize: 14,
-    color: '#999',
+    color: '#9A9A9A',
     marginRight: 8,
   },
   premiumCloseButton: {
@@ -1441,7 +1441,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   currentPlanBox: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#E8F9E8',
     padding: 20,
     borderRadius: 16,
     alignItems: 'center',
@@ -1449,12 +1449,12 @@ const styles = StyleSheet.create({
   },
   currentPlanTitle: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#98D8C8',
   },
   currentPlanName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#4A4A4A',
     marginTop: 4,
   },
   managePlanButton: {
@@ -1462,7 +1462,7 @@ const styles = StyleSheet.create({
   },
   managePlanText: {
     fontSize: 14,
-    color: '#4CAF50',
+    color: '#98D8C8',
     textDecorationLine: 'underline',
   },
   benefitsSection: {
@@ -1471,7 +1471,7 @@ const styles = StyleSheet.create({
   benefitsTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 16,
   },
   benefitItem: {
@@ -1481,7 +1481,7 @@ const styles = StyleSheet.create({
   },
   benefitText: {
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
     marginLeft: 12,
   },
   plansSection: {
@@ -1490,26 +1490,26 @@ const styles = StyleSheet.create({
   plansTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 16,
   },
   planCard: {
     backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: '#e0e0e0',
+    borderColor: '#F0E0E0',
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
     position: 'relative',
   },
   planCardPopular: {
-    borderColor: '#6b46c1',
+    borderColor: '#FFB6C1',
   },
   popularBadge: {
     position: 'absolute',
     top: -12,
     right: 20,
-    backgroundColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
@@ -1522,7 +1522,7 @@ const styles = StyleSheet.create({
   planName: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 8,
   },
   planPriceContainer: {
@@ -1533,15 +1533,15 @@ const styles = StyleSheet.create({
   planPrice: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#6b46c1',
+    color: '#FFB6C1',
   },
   planPeriod: {
     fontSize: 16,
-    color: '#999',
+    color: '#9A9A9A',
     marginLeft: 8,
   },
   planSavings: {
-    backgroundColor: '#FFF9E6',
+    backgroundColor: '#FFF0E5',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
@@ -1550,7 +1550,7 @@ const styles = StyleSheet.create({
   },
   planSavingsText: {
     fontSize: 14,
-    color: '#FF8C00',
+    color: '#FFA07A',
     fontWeight: '600',
   },
   planFeatures: {
@@ -1563,22 +1563,22 @@ const styles = StyleSheet.create({
   },
   planFeatureText: {
     fontSize: 14,
-    color: '#666',
+    color: '#7A7A7A',
     marginLeft: 8,
   },
   planButton: {
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#F0E0E0',
     paddingVertical: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
   planButtonPopular: {
-    backgroundColor: '#6b46c1',
+    backgroundColor: '#FFB6C1',
   },
   planButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#7A7A7A',
   },
   planButtonTextPopular: {
     color: '#fff',
@@ -1589,7 +1589,7 @@ const styles = StyleSheet.create({
   faqTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#333',
+    color: '#4A4A4A',
     marginBottom: 16,
   },
   faqItem: {
@@ -1598,11 +1598,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F0E0E0',
   },
   faqQuestion: {
     fontSize: 16,
-    color: '#333',
+    color: '#4A4A4A',
     flex: 1,
   },
   restoreButton: {
@@ -1611,7 +1611,7 @@ const styles = StyleSheet.create({
   },
   restoreButtonText: {
     fontSize: 14,
-    color: '#6b46c1',
+    color: '#FFB6C1',
     textDecorationLine: 'underline',
   },
 });
