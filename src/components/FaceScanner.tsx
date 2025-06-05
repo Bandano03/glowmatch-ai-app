@@ -7,8 +7,9 @@ import {
   Animated,
   Dimensions,
   Text,
+  TouchableOpacity,
 } from 'react-native';
-import { Camera } from 'expo-camera';
+import { Camera, CameraType } from 'expo-camera';  // WICHTIG: CameraType importieren!
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
@@ -156,7 +157,7 @@ export function FaceScanner({ onScanComplete, onProgress }: FaceScannerProps) {
       <Camera
         ref={cameraRef}
         style={styles.camera}
-        type={Camera.Constants.Type.front}
+        type={CameraType.front}  // KORRIGIERT: CameraType.front statt Camera.Constants.Type.front
         ratio="4:3"
       >
         {/* Scan Overlay */}
@@ -422,3 +423,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+// Export
+export default FaceScanner;
