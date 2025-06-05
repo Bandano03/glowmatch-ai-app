@@ -6,10 +6,18 @@ import {
   ScrollView, 
   TouchableOpacity, 
   StatusBar,
-  Modal
+  Modal,
+  RefreshControl,
+  Dimensions,
+  Animated,
+  Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { UserContext } from '../../App';
+
+const { width, height } = Dimensions.get('window');
 
 export function HistoryScreen() {
   const { user } = useContext(UserContext);
@@ -17,6 +25,7 @@ export function HistoryScreen() {
   const [selectedReport, setSelectedReport] = useState(null);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const analysisHistory = [
     {
@@ -39,7 +48,7 @@ export function HistoryScreen() {
       timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
       title: 'Komplettanalyse - ' + new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toLocaleDateString('de-DE'),
       skinAnalysis: {
-        skinType: 'Normal',
+        skinType: 'Mischhaut',
         hydration: 3,
         elasticity: 3,
         evenness: 3,
@@ -52,6 +61,19 @@ export function HistoryScreen() {
         healthScore: 75
       },
       aiComment: 'Leichte Austrocknung festgestellt'
+    },
+    {
+      id: '3',
+      analysisType: 'hair',
+      timestamp: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+      title: 'Haaranalyse - ' + new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toLocaleDateString('de-DE'),
+      hairAnalysis: {
+        hairType: '2B',
+        hairDensity: 'Normal',
+        shineLevel: 4,
+        healthScore: 82
+      },
+      aiComment: 'Gesundes Haar mit guter Struktur'
     }
   ];
 
@@ -76,6 +98,14 @@ export function HistoryScreen() {
   const latestAnalysis = analysisHistory[0];
   const latestReport = weeklyReports[0];
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    // Simuliere Daten-Reload
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  };
+
   const getTrendIcon = (trend) => {
     switch (trend) {
       case 'improving': return { name: 'trending-up', color: '#10b981' };
@@ -90,186 +120,277 @@ export function HistoryScreen() {
     return '#ef4444';
   };
 
-  const exportToPDF = () => {
-    alert('PDF-Export ist nur für Premium-Nutzer verfügbar!');
+  const getAnalysisTypeInfo = (type) => {
+    switch (type) {
+      case 'skin':
+        return { 
+          icon: 'sparkles', 
+          title: 'Hautanalyse',
+          gradient: ['#FFE4E6', '#FECACA'],
+          iconColor: '#F87171'
+        };
+      case 'hair':
+        return { 
+          icon: 'cut', 
+          title: 'Haaranalyse',
+          gradient: ['#FEF3C7', '#FDE68A'],
+          iconColor: '#F59E0B'
+        };
+      case 'combined':
+        return { 
+          icon: 'star', 
+          title: 'Komplettanalyse',
+          gradient: ['#E0E7FF', '#C7D2FE'],
+          iconColor: '#6366F1'
+        };
+      default:
+        return { 
+          icon: 'analytics', 
+          title: 'Analyse',
+          gradient: ['#F3E8FF', '#DDD6FE'],
+          iconColor: '#8B5CF6'
+        };
+    }
   };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
-      {/* Header */}
-      <View style={styles.header}>
+  const renderHeader = () => (
+    <LinearGradient
+      colors={['#fdf2f8', '#fce7f3']}
+      style={styles.header}
+    >
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.headerContent}>
         <Text style={styles.headerTitle}>Analyse-Verlauf</Text>
-        <Text style={styles.headerSubtitle}>Verfolge deine Beauty-Entwicklung über die Zeit</Text>
-      </View>
-
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Latest Analysis Summary */}
-        {latestAnalysis && (
-          <View style={styles.latestAnalysisCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderLeft}>
-                <Ionicons name="time" size={24} color="#6b46c1" />
-                <Text style={styles.cardTitle}>Letzte Analyse</Text>
-              </View>
-              <Text style={styles.timestamp}>
-                {new Date(latestAnalysis.timestamp).toLocaleDateString('de-DE', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                })}
-              </Text>
-            </View>
-
-            <View style={styles.analysisGrid}>
-              <View style={styles.analysisOverview}>
-                <Text style={styles.analysisIcon}>
-                  {latestAnalysis.analysisType === 'skin' ? '✨' : 
-                   latestAnalysis.analysisType === 'hair' ? '💇‍♀️' : '🌟'}
-                </Text>
-                <Text style={styles.analysisTypeTitle}>
-                  {latestAnalysis.analysisType === 'skin' ? 'Hautanalyse' :
-                   latestAnalysis.analysisType === 'hair' ? 'Haaranalyse' : 'Komplettanalyse'}
-                </Text>
-                <Text style={[styles.analysisScore, { color: getScoreColor(
-                  latestAnalysis.skinAnalysis?.score || latestAnalysis.hairAnalysis?.healthScore || 0
-                )}]}>
-                  {latestAnalysis.skinAnalysis?.score || latestAnalysis.hairAnalysis?.healthScore || 0}/100
-                </Text>
-              </View>
-
-              <View style={styles.analysisDetails}>
-                <Text style={styles.analysisDetailTitle}>Hauttyp</Text>
-                <Text style={styles.analysisDetailValue}>{latestAnalysis.skinAnalysis?.skinType || 'N/A'}</Text>
-                {latestAnalysis.hairAnalysis && (
-                  <>
-                    <Text style={styles.analysisDetailTitle}>Haartyp</Text>
-                    <Text style={styles.analysisDetailValue}>{latestAnalysis.hairAnalysis.hairType}</Text>
-                  </>
-                )}
-              </View>
-
-              <View style={styles.analysisComment}>
-                <Text style={styles.analysisCommentTitle}>KI-Kommentar</Text>
-                <Text style={styles.analysisCommentText}>{latestAnalysis.aiComment}</Text>
-                <View style={styles.analysisActions}>
-                  <TouchableOpacity
-                    style={styles.primaryAction}
-                    onPress={() => {
-                      setSelectedAnalysis(latestAnalysis);
-                      setShowAnalysisModal(true);
-                    }}
-                  >
-                    <Text style={styles.primaryActionText}>Details ansehen</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.secondaryAction}>
-                    <Text style={styles.secondaryActionText}>Empfehlungen anzeigen</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
+        <Text style={styles.headerSubtitle}>
+          Verfolgen Sie Ihre Beauty-Entwicklung über die Zeit
+        </Text>
+        
+        {/* Quick Stats */}
+        <View style={styles.quickStats}>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>{analysisHistory.length}</Text>
+            <Text style={styles.statLabel}>Analysen</Text>
           </View>
-        )}
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>
+              {latestAnalysis?.skinAnalysis?.score || latestAnalysis?.hairAnalysis?.healthScore || 0}
+            </Text>
+            <Text style={styles.statLabel}>Letzter Score</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statNumber}>
+              {latestReport?.scoreDiff >= 0 ? '+' : ''}{latestReport?.scoreDiff || 0}
+            </Text>
+            <Text style={styles.statLabel}>Trend</Text>
+          </View>
+        </View>
+      </View>
+    </LinearGradient>
+  );
 
-        {/* Weekly Report */}
-        {latestReport && (
-          <View style={styles.weeklyReportCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardHeaderLeft}>
-                <Ionicons name="bar-chart" size={24} color="#3b82f6" />
-                <Text style={styles.cardTitle}>Wöchentlicher Bericht</Text>
-                {latestReport.isNew && (
-                  <View style={styles.newBadge}>
-                    <Text style={styles.newBadgeText}>NEU</Text>
+  const renderLatestAnalysis = () => {
+    if (!latestAnalysis) return null;
+    
+    const typeInfo = getAnalysisTypeInfo(latestAnalysis.analysisType);
+    
+    return (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Letzte Analyse</Text>
+        
+        <TouchableOpacity
+          style={styles.latestAnalysisCard}
+          onPress={() => {
+            setSelectedAnalysis(latestAnalysis);
+            setShowAnalysisModal(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={typeInfo.gradient}
+            style={styles.latestAnalysisGradient}
+          >
+            <View style={styles.latestAnalysisHeader}>
+              <View style={styles.analysisIconContainer}>
+                <Ionicons name={typeInfo.icon as any} size={32} color={typeInfo.iconColor} />
+              </View>
+              <View style={styles.latestAnalysisInfo}>
+                <Text style={styles.latestAnalysisTitle}>{typeInfo.title}</Text>
+                <Text style={styles.latestAnalysisDate}>
+                  {new Date(latestAnalysis.timestamp).toLocaleDateString('de-DE', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </Text>
+              </View>
+              <View style={styles.latestAnalysisScore}>
+                <Text style={[
+                  styles.scoreValue,
+                  { color: getScoreColor(
+                    latestAnalysis.skinAnalysis?.score || latestAnalysis.hairAnalysis?.healthScore || 0
+                  )}
+                ]}>
+                  {latestAnalysis.skinAnalysis?.score || latestAnalysis.hairAnalysis?.healthScore || 0}
+                </Text>
+                <Text style={styles.scoreLabel}>Score</Text>
+              </View>
+            </View>
+            
+            <View style={styles.latestAnalysisContent}>
+              {latestAnalysis.skinAnalysis && (
+                <View style={styles.analysisMetrics}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Hauttyp</Text>
+                    <Text style={styles.metricValue}>{latestAnalysis.skinAnalysis.skinType}</Text>
                   </View>
-                )}
-              </View>
-              {user?.isPremium && (
-                <TouchableOpacity style={styles.pdfButton} onPress={exportToPDF}>
-                  <Ionicons name="download" size={16} color="white" />
-                  <Text style={styles.pdfButtonText}>PDF Export</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <View style={styles.reportGrid}>
-              <View style={styles.reportMetric}>
-                <View style={[styles.reportIcon, { backgroundColor: '#dbeafe' }]}>
-                  <Ionicons name={getTrendIcon(latestReport.trend).name} size={32} color={getTrendIcon(latestReport.trend).color} />
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Hydration</Text>
+                    <Text style={styles.metricValue}>{latestAnalysis.skinAnalysis.hydration}/5</Text>
+                  </View>
                 </View>
-                <Text style={styles.reportMetricTitle}>Trend</Text>
-                <Text style={styles.reportMetricValue}>
-                  {latestReport.trend === 'improving' ? 'Verbesserung' : 
-                   latestReport.trend === 'declining' ? 'Verschlechterung' : 'Stabil'}
-                </Text>
-              </View>
-
-              <View style={styles.reportMetric}>
-                <Text style={styles.reportScoreValue}>{latestReport.overallScore}</Text>
-                <Text style={styles.reportMetricTitle}>Aktueller Score</Text>
-                <Text style={[styles.reportScoreChange, { color: latestReport.scoreDiff >= 0 ? '#10b981' : '#ef4444' }]}>
-                  {latestReport.scoreDiff >= 0 ? '+' : ''}{latestReport.scoreDiff} vs. Vorwoche
-                </Text>
-              </View>
-
-              <View style={styles.reportMetric}>
-                <Text style={styles.reportIcon}>📈</Text>
-                <Text style={styles.reportMetricTitle}>Änderungen</Text>
-                <Text style={styles.reportMetricValue}>{latestReport.changes.length} erkannt</Text>
+              )}
+              
+              {latestAnalysis.hairAnalysis && (
+                <View style={styles.analysisMetrics}>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Haartyp</Text>
+                    <Text style={styles.metricValue}>{latestAnalysis.hairAnalysis.hairType}</Text>
+                  </View>
+                  <View style={styles.metricItem}>
+                    <Text style={styles.metricLabel}>Glanz</Text>
+                    <Text style={styles.metricValue}>{latestAnalysis.hairAnalysis.shineLevel}/5</Text>
+                  </View>
+                </View>
+              )}
+              
+              <View style={styles.aiCommentContainer}>
+                <Ionicons name="bulb" size={16} color="#6366F1" />
+                <Text style={styles.aiComment}>{latestAnalysis.aiComment}</Text>
               </View>
             </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
-            <View style={styles.recommendationBox}>
-              <Text style={styles.recommendationTitle}>Empfehlung</Text>
+  const renderWeeklyReport = () => {
+    if (!latestReport) return null;
+    
+    const trendIcon = getTrendIcon(latestReport.trend);
+    
+    return (
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Wöchentlicher Bericht</Text>
+          {latestReport.isNew && (
+            <View style={styles.newBadge}>
+              <Text style={styles.newBadgeText}>NEU</Text>
+            </View>
+          )}
+        </View>
+        
+        <TouchableOpacity
+          style={styles.weeklyReportCard}
+          onPress={() => {
+            setSelectedReport(latestReport);
+            setShowReportModal(true);
+          }}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={['#F0FDF4', '#DCFCE7']}
+            style={styles.weeklyReportGradient}
+          >
+            <View style={styles.reportHeader}>
+              <View style={styles.reportIconContainer}>
+                <Ionicons name="bar-chart" size={24} color="#059669" />
+              </View>
+              <View style={styles.reportInfo}>
+                <Text style={styles.reportTitle}>Fortschrittsbericht</Text>
+                <Text style={styles.reportPeriod}>{latestReport.period}</Text>
+              </View>
+              <View style={[styles.trendIndicator, { backgroundColor: `${trendIcon.color}20` }]}>
+                <Ionicons name={trendIcon.name as any} size={20} color={trendIcon.color} />
+              </View>
+            </View>
+            
+            <View style={styles.reportMetrics}>
+              <View style={styles.reportMetric}>
+                <Text style={styles.reportMetricValue}>{latestReport.overallScore}</Text>
+                <Text style={styles.reportMetricLabel}>Aktueller Score</Text>
+              </View>
+              <View style={styles.reportMetric}>
+                <Text style={[
+                  styles.reportMetricValue,
+                  { color: latestReport.scoreDiff >= 0 ? '#059669' : '#DC2626' }
+                ]}>
+                  {latestReport.scoreDiff >= 0 ? '+' : ''}{latestReport.scoreDiff}
+                </Text>
+                <Text style={styles.reportMetricLabel}>Veränderung</Text>
+              </View>
+              <View style={styles.reportMetric}>
+                <Text style={styles.reportMetricValue}>{latestReport.changes.length}</Text>
+                <Text style={styles.reportMetricLabel}>Änderungen</Text>
+              </View>
+            </View>
+            
+            <View style={styles.recommendationPreview}>
+              <Ionicons name="lightbulb" size={16} color="#F59E0B" />
               <Text style={styles.recommendationText}>{latestReport.recommendation}</Text>
             </View>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    );
+  };
 
-            <TouchableOpacity
-              style={styles.fullReportButton}
-              onPress={() => {
-                setSelectedReport(latestReport);
-                setShowReportModal(true);
-              }}
-            >
-              <Text style={styles.fullReportButtonText}>Vollständigen Bericht ansehen</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* All Analyses */}
-        <View style={styles.allAnalysesCard}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardHeaderLeft}>
-              <Ionicons name="archive" size={24} color="#6b7280" />
-              <Text style={styles.cardTitle}>Alle Analysen ({analysisHistory.length})</Text>
-            </View>
-          </View>
-
-          {analysisHistory.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateIcon}>📊</Text>
-              <Text style={styles.emptyStateTitle}>Noch keine Analysen</Text>
-              <Text style={styles.emptyStateDescription}>Führe deine erste Analyse durch, um deinen Verlauf zu starten.</Text>
-            </View>
-          ) : (
-            <View style={styles.analysesList}>
-              {analysisHistory.map(analysis => (
-                <View key={analysis.id} style={styles.analysisListItem}>
-                  <View style={styles.analysisListHeader}>
-                    <View style={styles.analysisListLeft}>
-                      <Text style={styles.analysisListIcon}>
-                        {analysis.analysisType === 'skin' ? '✨' : 
-                         analysis.analysisType === 'hair' ? '💇‍♀️' : '🌟'}
-                      </Text>
-                      <View>
-                        <Text style={styles.analysisListTitle}>
-                          {analysis.analysisType === 'skin' ? 'Hautanalyse' :
-                           analysis.analysisType === 'hair' ? 'Haaranalyse' : 'Komplettanalyse'}
-                        </Text>
-                        <Text style={styles.analysisListDate}>
+  const renderAnalysisHistory = () => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Alle Analysen ({analysisHistory.length})</Text>
+      
+      {analysisHistory.length === 0 ? (
+        <View style={styles.emptyState}>
+          <LinearGradient
+            colors={['#F8FAFC', '#F1F5F9']}
+            style={styles.emptyStateGradient}
+          >
+            <Ionicons name="analytics-outline" size={64} color="#94A3B8" />
+            <Text style={styles.emptyStateTitle}>Noch keine Analysen</Text>
+            <Text style={styles.emptyStateDescription}>
+              Führen Sie Ihre erste Analyse durch, um Ihren Verlauf zu starten.
+            </Text>
+          </LinearGradient>
+        </View>
+      ) : (
+        <View style={styles.historyList}>
+          {analysisHistory.map((analysis, index) => {
+            const typeInfo = getAnalysisTypeInfo(analysis.analysisType);
+            
+            return (
+              <TouchableOpacity
+                key={analysis.id}
+                style={styles.historyItem}
+                onPress={() => {
+                  setSelectedAnalysis(analysis);
+                  setShowAnalysisModal(true);
+                }}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={typeInfo.gradient}
+                  style={styles.historyItemGradient}
+                >
+                  <View style={styles.historyItemContent}>
+                    <View style={styles.historyItemLeft}>
+                      <View style={[styles.historyItemIcon, { backgroundColor: `${typeInfo.iconColor}20` }]}>
+                        <Ionicons name={typeInfo.icon as any} size={20} color={typeInfo.iconColor} />
+                      </View>
+                      <View style={styles.historyItemInfo}>
+                        <Text style={styles.historyItemTitle}>{typeInfo.title}</Text>
+                        <Text style={styles.historyItemDate}>
                           {new Date(analysis.timestamp).toLocaleDateString('de-DE', {
                             day: '2-digit',
                             month: '2-digit',
@@ -278,52 +399,53 @@ export function HistoryScreen() {
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.analysisListScore}>
-                      <Text style={[styles.analysisListScoreValue, { color: getScoreColor(
-                        analysis.skinAnalysis?.score || analysis.hairAnalysis?.healthScore || 0
-                      )}]}>
+                    
+                    <View style={styles.historyItemRight}>
+                      <Text style={[
+                        styles.historyItemScore,
+                        { color: getScoreColor(
+                          analysis.skinAnalysis?.score || analysis.hairAnalysis?.healthScore || 0
+                        )}
+                      ]}>
                         {analysis.skinAnalysis?.score || analysis.hairAnalysis?.healthScore || 0}
                       </Text>
-                      <Text style={styles.analysisListScoreLabel}>Score</Text>
+                      <Ionicons name="chevron-forward" size={16} color="#9CA3AF" />
                     </View>
                   </View>
-
-                  <Text style={styles.analysisListComment}>{analysis.aiComment}</Text>
-
-                  <View style={styles.analysisListActions}>
-                    <TouchableOpacity
-                      style={styles.analysisListAction}
-                      onPress={() => {
-                        setSelectedAnalysis(analysis);
-                        setShowAnalysisModal(true);
-                      }}
-                    >
-                      <Text style={styles.analysisListActionText}>Details ansehen</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.analysisListActionSecondary}>
-                      <Text style={styles.analysisListActionSecondaryText}>Empfehlungen</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
+                  
+                  <Text style={styles.historyItemComment}>{analysis.aiComment}</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      </ScrollView>
+      )}
+    </View>
+  );
 
-      {/* Analysis Details Modal */}
-      <Modal visible={showAnalysisModal} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Analyse Details</Text>
-            <TouchableOpacity onPress={() => setShowAnalysisModal(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
+  const renderAnalysisModal = () => (
+    <Modal visible={showAnalysisModal} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <LinearGradient
+          colors={['#fdf2f8', '#fce7f3']}
+          style={styles.modalHeader}
+        >
+          <Text style={[styles.modalTitle, { color: '#1f2937' }]}>Analyse Details</Text>
+          <TouchableOpacity 
+            onPress={() => setShowAnalysisModal(false)}
+            style={styles.modalCloseButton}
+          >
+            <Ionicons name="close" size={24} color="#1f2937" />
+          </TouchableOpacity>
+        </LinearGradient>
 
-          {selectedAnalysis && (
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.modalSection}>
+        {selectedAnalysis && (
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.modalSection}>
+              <LinearGradient
+                colors={['#F8FAFC', '#F1F5F9']}
+                style={styles.modalSectionGradient}
+              >
                 <Text style={styles.modalSectionTitle}>Basis-Informationen</Text>
                 <View style={styles.modalInfoGrid}>
                   <View style={styles.modalInfoItem}>
@@ -335,15 +457,19 @@ export function HistoryScreen() {
                   <View style={styles.modalInfoItem}>
                     <Text style={styles.modalInfoLabel}>Typ:</Text>
                     <Text style={styles.modalInfoValue}>
-                      {selectedAnalysis.analysisType === 'skin' ? 'Hautanalyse' :
-                       selectedAnalysis.analysisType === 'hair' ? 'Haaranalyse' : 'Komplettanalyse'}
+                      {getAnalysisTypeInfo(selectedAnalysis.analysisType).title}
                     </Text>
                   </View>
                 </View>
-              </View>
+              </LinearGradient>
+            </View>
 
-              {selectedAnalysis.skinAnalysis && (
-                <View style={styles.modalSection}>
+            {selectedAnalysis.skinAnalysis && (
+              <View style={styles.modalSection}>
+                <LinearGradient
+                  colors={['#FEF2F2', '#FEE2E2']}
+                  style={styles.modalSectionGradient}
+                >
                   <Text style={styles.modalSectionTitle}>Hautanalyse</Text>
                   <View style={styles.modalMetricsGrid}>
                     <View style={styles.modalMetric}>
@@ -363,11 +489,16 @@ export function HistoryScreen() {
                       <Text style={styles.modalMetricLabel}>Gesamt-Score</Text>
                     </View>
                   </View>
-                </View>
-              )}
+                </LinearGradient>
+              </View>
+            )}
 
-              {selectedAnalysis.hairAnalysis && (
-                <View style={styles.modalSection}>
+            {selectedAnalysis.hairAnalysis && (
+              <View style={styles.modalSection}>
+                <LinearGradient
+                  colors={['#FFFBEB', '#FEF3C7']}
+                  style={styles.modalSectionGradient}
+                >
                   <Text style={styles.modalSectionTitle}>Haaranalyse</Text>
                   <View style={styles.modalMetricsGrid}>
                     <View style={styles.modalMetric}>
@@ -387,60 +518,118 @@ export function HistoryScreen() {
                       <Text style={styles.modalMetricLabel}>Gesundheit</Text>
                     </View>
                   </View>
-                </View>
-              )}
-
-              <View style={styles.modalSection}>
-                <Text style={styles.modalSectionTitle}>KI-Kommentar</Text>
-                <Text style={styles.modalComment}>{selectedAnalysis.aiComment}</Text>
+                </LinearGradient>
               </View>
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
+            )}
 
-      {/* Weekly Report Modal */}
-      <Modal visible={showReportModal} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Wöchentlicher Bericht</Text>
-            <TouchableOpacity onPress={() => setShowReportModal(false)}>
-              <Ionicons name="close" size={24} color="#6b7280" />
-            </TouchableOpacity>
-          </View>
+            <View style={styles.modalSection}>
+              <LinearGradient
+                colors={['#F0F9FF', '#E0F2FE']}
+                style={styles.modalSectionGradient}
+              >
+                <Text style={styles.modalSectionTitle}>KI-Kommentar</Text>
+                <View style={styles.modalCommentContainer}>
+                  <Ionicons name="sparkles" size={20} color="#0EA5E9" />
+                  <Text style={styles.modalComment}>{selectedAnalysis.aiComment}</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          </ScrollView>
+        )}
+      </View>
+    </Modal>
+  );
 
-          {selectedReport && (
-            <ScrollView style={styles.modalContent}>
-              <View style={styles.modalSection}>
+  const renderReportModal = () => (
+    <Modal visible={showReportModal} animationType="slide" presentationStyle="pageSheet">
+      <View style={styles.modalContainer}>
+        <LinearGradient
+          colors={['#f0fdf4', '#dcfce7']}
+          style={styles.modalHeader}
+        >
+          <Text style={[styles.modalTitle, { color: '#1f2937' }]}>Wöchentlicher Bericht</Text>
+          <TouchableOpacity 
+            onPress={() => setShowReportModal(false)}
+            style={styles.modalCloseButton}
+          >
+            <Ionicons name="close" size={24} color="#1f2937" />
+          </TouchableOpacity>
+        </LinearGradient>
+
+        {selectedReport && (
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.modalSection}>
+              <LinearGradient
+                colors={['#F0FDF4', '#DCFCE7']}
+                style={styles.modalSectionGradient}
+              >
                 <Text style={styles.modalSectionTitle}>Zeitraum</Text>
                 <Text style={styles.modalInfoValue}>{selectedReport.period}</Text>
-              </View>
+              </LinearGradient>
+            </View>
 
-              <View style={styles.modalSection}>
+            <View style={styles.modalSection}>
+              <LinearGradient
+                colors={['#FFFBEB', '#FEF3C7']}
+                style={styles.modalSectionGradient}
+              >
                 <Text style={styles.modalSectionTitle}>Erkannte Veränderungen</Text>
                 <View style={styles.changesList}>
                   {selectedReport.changes.map((change, index) => (
                     <View key={index} style={styles.changeItem}>
                       <Text style={styles.changeDescription}>{change.description}</Text>
                       <Text style={[styles.changeValue, {
-                        color: change.type === 'improvement' ? '#10b981' : 
-                              change.type === 'decline' ? '#ef4444' : '#6b7280'
+                        color: change.type === 'improvement' ? '#059669' : 
+                              change.type === 'decline' ? '#DC2626' : '#6B7280'
                       }]}>
                         {change.change}
                       </Text>
                     </View>
                   ))}
                 </View>
-              </View>
+              </LinearGradient>
+            </View>
 
-              <View style={styles.modalSection}>
+            <View style={styles.modalSection}>
+              <LinearGradient
+                colors={['#F0F9FF', '#E0F2FE']}
+                style={styles.modalSectionGradient}
+              >
                 <Text style={styles.modalSectionTitle}>Empfehlung</Text>
-                <Text style={styles.modalRecommendation}>{selectedReport.recommendation}</Text>
-              </View>
-            </ScrollView>
-          )}
-        </View>
-      </Modal>
+                <View style={styles.modalRecommendationContainer}>
+                  <Ionicons name="lightbulb" size={20} color="#F59E0B" />
+                  <Text style={styles.modalRecommendation}>{selectedReport.recommendation}</Text>
+                </View>
+              </LinearGradient>
+            </View>
+          </ScrollView>
+        )}
+      </View>
+    </Modal>
+  );
+
+  return (
+    <View style={styles.container}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#ec4899"
+          />
+        }
+      >
+        {renderHeader()}
+        {renderLatestAnalysis()}
+        {renderWeeklyReport()}
+        {renderAnalysisHistory()}
+        
+        <View style={{ height: 100 }} />
+      </ScrollView>
+
+      {renderAnalysisModal()}
+      {renderReportModal()}
     </View>
   );
 }
@@ -451,416 +640,422 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    paddingTop: 60,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 30,
+    paddingHorizontal: 20,
+  },
+  headerContent: {
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#1f2937',
     marginBottom: 8,
   },
   headerSubtitle: {
     fontSize: 16,
     color: '#6b7280',
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-  },
-  latestAnalysisCard: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  weeklyReportCard: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  allAnalysesCard: {
-    backgroundColor: 'white',
-    borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    textAlign: 'center',
     marginBottom: 24,
   },
-  cardHeaderLeft: {
+  quickStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  statCard: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    minWidth: 80,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  section: {
+    paddingHorizontal: 20,
+    marginTop: 24,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 16,
   },
-  cardTitle: {
+  sectionTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    flex: 1,
   },
   newBadge: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#EF4444',
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 12,
   },
   newBadgeText: {
-    color: 'white',
+    color: '#fff',
     fontSize: 10,
     fontWeight: 'bold',
   },
-  timestamp: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  pdfButton: {
-    backgroundColor: '#6b46c1',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  latestAnalysisCard: {
     borderRadius: 20,
-    gap: 4,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  pdfButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
+  latestAnalysisGradient: {
+    padding: 20,
   },
-  analysisGrid: {
+  latestAnalysisHeader: {
     flexDirection: 'row',
-    gap: 24,
-  },
-  analysisOverview: {
     alignItems: 'center',
+    marginBottom: 16,
+  },
+  analysisIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  latestAnalysisInfo: {
     flex: 1,
   },
-  analysisIcon: {
-    fontSize: 32,
-    marginBottom: 12,
-  },
-  analysisTypeTitle: {
-    fontSize: 16,
+  latestAnalysisTitle: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 8,
+    color: '#374151',
   },
-  analysisScore: {
+  latestAnalysisDate: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  latestAnalysisScore: {
+    alignItems: 'center',
+  },
+  scoreValue: {
     fontSize: 24,
     fontWeight: 'bold',
   },
-  analysisDetails: {
-    flex: 1,
+  scoreLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
-  analysisDetailTitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '600',
-    marginBottom: 4,
+  latestAnalysisContent: {
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.3)',
   },
-  analysisDetailValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  analysisComment: {
-    flex: 1,
-  },
-  analysisCommentTitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  analysisCommentText: {
-    fontSize: 14,
-    color: '#374151',
+  analysisMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     marginBottom: 16,
   },
-  analysisActions: {
-    gap: 8,
-  },
-  primaryAction: {
-    backgroundColor: '#6b46c1',
-    paddingVertical: 8,
-    borderRadius: 8,
+  metricItem: {
     alignItems: 'center',
   },
-  primaryActionText: {
-    color: 'white',
-    fontSize: 14,
+  metricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 16,
     fontWeight: '600',
-  },
-  secondaryAction: {
-    backgroundColor: '#f3f4f6',
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  secondaryActionText: {
     color: '#374151',
-    fontSize: 14,
-    fontWeight: '600',
   },
-  reportGrid: {
+  aiCommentContainer: {
     flexDirection: 'row',
-    gap: 24,
-    marginBottom: 24,
-  },
-  reportMetric: {
-    flex: 1,
     alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    padding: 12,
+    borderRadius: 12,
   },
-  reportIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
+  aiComment: {
+    fontSize: 14,
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
+    fontStyle: 'italic',
+  },
+  weeklyReportCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  weeklyReportGradient: {
+    padding: 20,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  reportIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(5, 150, 105, 0.2)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginRight: 12,
   },
-  reportMetricTitle: {
+  reportInfo: {
+    flex: 1,
+  },
+  reportTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#374151',
+  },
+  reportPeriod: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  trendIndicator: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reportMetrics: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 12,
+  },
+  reportMetric: {
+    alignItems: 'center',
   },
   reportMetricValue: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  reportScoreValue: {
-    fontSize: 32,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#6b46c1',
-    marginBottom: 4,
+    color: '#059669',
   },
-  reportScoreChange: {
-    fontSize: 14,
-    fontWeight: '600',
+  reportMetricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
-  recommendationBox: {
-    backgroundColor: '#dbeafe',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
-  },
-  recommendationTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e40af',
-    marginBottom: 8,
+  recommendationPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    padding: 12,
+    borderRadius: 12,
   },
   recommendationText: {
     fontSize: 14,
-    color: '#1e40af',
-  },
-  fullReportButton: {
-    backgroundColor: '#3b82f6',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  fullReportButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#374151',
+    marginLeft: 8,
+    flex: 1,
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 48,
+    paddingVertical: 60,
   },
-  emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 16,
+  emptyStateGradient: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 40,
+    borderRadius: 20,
+    width: '100%',
   },
   emptyStateTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#111827',
+    color: '#374151',
+    marginTop: 16,
     marginBottom: 8,
   },
   emptyStateDescription: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#6B7280',
     textAlign: 'center',
+    lineHeight: 20,
   },
-  analysesList: {
-    gap: 16,
+  historyList: {
+    gap: 12,
   },
-  analysisListItem: {
-    backgroundColor: '#f9fafb',
+  historyItem: {
     borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
-  analysisListHeader: {
+  historyItemGradient: {
+    padding: 16,
+  },
+  historyItemContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  analysisListLeft: {
+  historyItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     flex: 1,
   },
-  analysisListIcon: {
-    fontSize: 24,
+  historyItemIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
   },
-  analysisListTitle: {
+  historyItemInfo: {
+    flex: 1,
+  },
+  historyItemTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
-  },
-  analysisListDate: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  analysisListScore: {
-    alignItems: 'center',
-  },
-  analysisListScoreValue: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  analysisListScoreLabel: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  analysisListComment: {
-    fontSize: 14,
     color: '#374151',
-    marginBottom: 12,
   },
-  analysisListActions: {
+  historyItemDate: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  historyItemRight: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  analysisListAction: {
-    flex: 1,
-    backgroundColor: '#6b46c1',
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
+  historyItemScore: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
-  analysisListActionText: {
-    color: 'white',
+  historyItemComment: {
     fontSize: 14,
-    fontWeight: '600',
-  },
-  analysisListActionSecondary: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-    paddingVertical: 8,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  analysisListActionSecondaryText: {
-    color: '#374151',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#6B7280',
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#f8f9fa',
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingBottom: 20,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#111827',
+    color: '#1f2937',
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(31,41,55,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   modalContent: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    padding: 20,
   },
   modalSection: {
-    marginBottom: 32,
+    marginBottom: 20,
+  },
+  modalSectionGradient: {
+    padding: 20,
+    borderRadius: 16,
   },
   modalSectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#111827',
+    color: '#374151',
     marginBottom: 16,
   },
   modalInfoGrid: {
-    gap: 16,
+    gap: 12,
   },
   modalInfoItem: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.6)',
     padding: 16,
+    borderRadius: 12,
   },
   modalInfoLabel: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#6B7280',
     marginBottom: 4,
   },
   modalInfoValue: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#111827',
+    color: '#374151',
   },
   modalMetricsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 12,
   },
   modalMetric: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.6)',
     padding: 16,
-    width: '47%',
+    borderRadius: 12,
+    width: (width - 76) / 2,
     alignItems: 'center',
   },
   modalMetricValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    color: '#6b46c1',
+    color: '#374151',
     marginBottom: 4,
   },
   modalMetricLabel: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#6B7280',
+  },
+  modalCommentContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    padding: 16,
+    borderRadius: 12,
   },
   modalComment: {
     fontSize: 16,
     color: '#374151',
-    backgroundColor: '#dbeafe',
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#bfdbfe',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 22,
   },
   changesList: {
     gap: 12,
@@ -869,7 +1064,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
+    backgroundColor: 'rgba(255,255,255,0.6)',
     padding: 16,
     borderRadius: 12,
   },
@@ -882,13 +1077,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  modalRecommendation: {
-    fontSize: 16,
-    color: '#10b981',
-    backgroundColor: '#d1fae5',
+  modalRecommendationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.6)',
     padding: 16,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
+  },
+  modalRecommendation: {
+    fontSize: 16,
+    color: '#374151',
+    marginLeft: 12,
+    flex: 1,
+    lineHeight: 22,
   },
 });
