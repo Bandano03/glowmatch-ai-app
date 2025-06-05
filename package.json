@@ -16,7 +16,7 @@
     "date-fns": "^4.1.0",
     "expo": "~53.0.9",
     "expo-blur": "~14.1.4",
-    "expo-camera": "~16.1.6",
+    "expo-camera": "~16.1.7",
     "expo-file-system": "~18.1.10",
     "expo-haptics": "~14.1.4",
     "expo-image-manipulator": "~13.1.7",
