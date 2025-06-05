@@ -107,180 +107,1089 @@ export function RecipesScreen() {
         { id: 'lips', name: 'Lippen', icon: 'heart', color: ['#FFDAB9', '#FFE4B5'] },  // Pastellapricot
       ];
       setCategories(categoriesData);
+// Erweiterte Rezepte-Datenbank - Ersetzen Sie den recipesData Array in RecipesScreen.tsx
 
-      // Load recipes
-      const recipesData: Recipe[] = [
-        {
-          id: '1',
-          title: 'Avocado Honig Gesichtsmaske',
-          category: 'face',
-          difficulty: 'easy',
-          time: 15,
-          ingredients: [
-            '1/2 reife Avocado',
-            '1 EL Bio-Honig',
-            '1 TL Joghurt',
-            '2 Tropfen Vitamin E Öl (optional)'
-          ],
-          instructions: [
-            'Avocado in einer Schüssel zerdrücken bis eine cremige Masse entsteht',
-            'Honig und Joghurt hinzufügen und gut vermischen',
-            'Optional: Vitamin E Öl für extra Pflege hinzufügen',
-            'Gesicht reinigen und die Maske gleichmäßig auftragen',
-            '15-20 Minuten einwirken lassen',
-            'Mit lauwarmem Wasser abspülen und Gesicht trocken tupfen',
-            'Anschließend Ihre normale Feuchtigkeitscreme auftragen'
-          ],
-          benefits: [
-            'Intensive Feuchtigkeitspflege',
-            'Reich an Vitaminen A, D und E',
-            'Beruhigt gereizte Haut',
-            'Verbessert die Hautelastizität',
-            'Natürliche Anti-Aging Wirkung'
-          ],
-          image: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273',
-          isPremium: false,
-          rating: 4.8,
-          reviews: 234,
-          isFavorite: false,
-          tips: [
-            'Verwenden Sie nur reife Avocados für beste Ergebnisse',
-            'Testen Sie die Maske erst an einer kleinen Hautstelle',
-            'Ideal für trockene und normale Hauttypen'
-          ],
-          warnings: [
-            'Nicht bei Avocado-Allergie verwenden',
-            'Vermeiden Sie die Augenpartie'
-          ]
-        },
-        {
-          id: '2',
-          title: 'Kokosöl Haarmaske',
-          category: 'hair',
-          difficulty: 'easy',
-          time: 30,
-          ingredients: [
-            '3 EL Kokosöl',
-            '1 EL Honig',
-            '1 Ei (optional für extra Protein)',
-            '5 Tropfen Rosmarinöl'
-          ],
-          instructions: [
-            'Kokosöl bei Bedarf leicht erwärmen bis es flüssig ist',
-            'Honig und optional das Ei hinzufügen',
-            'Rosmarinöl für bessere Durchblutung einrühren',
-            'Haare anfeuchten und die Maske vom Ansatz bis in die Spitzen einmassieren',
-            '30-45 Minuten einwirken lassen (mit Handtuch umwickeln)',
-            'Gründlich mit Shampoo auswaschen (evtl. 2x shampoonieren)'
-          ],
-          benefits: [
-            'Tiefenwirksame Pflege',
-            'Repariert geschädigtes Haar',
-            'Verleiht Glanz und Geschmeidigkeit',
-            'Fördert das Haarwachstum',
-            'Reduziert Spliss'
-          ],
-          image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc',
-          isPremium: false,
-          rating: 4.9,
-          reviews: 456,
-          isFavorite: false,
-          videoUrl: 'https://example.com/hair-mask-tutorial'
-        },
-        {
-          id: '3',
-          title: 'Kaffee-Peeling für strahlende Haut',
-          category: 'body',
-          difficulty: 'easy',
-          time: 10,
-          ingredients: [
-            '1/2 Tasse Kaffeesatz',
-            '1/4 Tasse Kokosöl',
-            '1/4 Tasse brauner Zucker',
-            '1 TL Vanilleextrakt'
-          ],
-          instructions: [
-            'Alle Zutaten in einer Schüssel vermischen',
-            'Unter der Dusche auf die feuchte Haut auftragen',
-            'In kreisenden Bewegungen einmassieren',
-            '5-10 Minuten einwirken lassen',
-            'Mit warmem Wasser abspülen'
-          ],
-          benefits: [
-            'Entfernt abgestorbene Hautzellen',
-            'Regt die Durchblutung an',
-            'Kann Cellulite mindern',
-            'Macht die Haut weich und glatt'
-          ],
-          image: 'https://images.unsplash.com/photo-1570554520913-ce3192c34509',
-          isPremium: true,
-          rating: 4.7,
-          reviews: 189,
-          isFavorite: false
-        },
-        {
-          id: '4',
-          title: 'Grüntee Toner',
-          category: 'face',
-          difficulty: 'easy',
-          time: 20,
-          ingredients: [
-            '1 Tasse grüner Tee (stark gebrüht)',
-            '2 EL Apfelessig',
-            '5 Tropfen Teebaumöl',
-            '1 EL Aloe Vera Gel'
-          ],
-          instructions: [
-            'Grünen Tee aufbrühen und vollständig abkühlen lassen',
-            'Apfelessig und Aloe Vera Gel hinzufügen',
-            'Teebaumöl einrühren',
-            'In eine saubere Sprühflasche füllen',
-            'Nach der Reinigung auf das Gesicht sprühen oder mit Wattepad auftragen'
-          ],
-          benefits: [
-            'Verfeinert die Poren',
-            'Wirkt entzündungshemmend',
-            'Reguliert die Talgproduktion',
-            'Reich an Antioxidantien'
-          ],
-          image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883',
-          isPremium: true,
-          rating: 4.6,
-          reviews: 98,
-          isFavorite: false
-        },
-        {
-          id: '5',
-          title: 'Honig-Zimt Lippenpeeling',
-          category: 'lips',
-          difficulty: 'easy',
-          time: 5,
-          ingredients: [
-            '1 TL Honig',
-            '1 TL brauner Zucker',
-            '1/2 TL Zimt',
-            '1/2 TL Kokosöl'
-          ],
-          instructions: [
-            'Alle Zutaten vermischen',
-            'Sanft auf die Lippen auftragen',
-            '1-2 Minuten massieren',
-            'Mit warmem Wasser abspülen',
-            'Lippenbalsam auftragen'
-          ],
-          benefits: [
-            'Entfernt trockene Hautschüppchen',
-            'Macht die Lippen weich',
-            'Regt die Durchblutung an',
-            'Natürliches Volumen'
-          ],
-          image: 'https://images.unsplash.com/photo-1583248369069-9d91f1640fe6',
-          isPremium: false,
-          rating: 4.9,
-          reviews: 321,
-          isFavorite: false
-        }
-      ];
+const recipesData: Recipe[] = [
+  // GESICHTSMASKEN
+  {
+    id: '1',
+    title: 'Avocado Honig Gesichtsmaske',
+    category: 'face',
+    difficulty: 'easy',
+    time: 15,
+    ingredients: [
+      '1/2 reife Avocado',
+      '1 EL Bio-Honig',
+      '1 TL Joghurt',
+      '2 Tropfen Vitamin E Öl (optional)'
+    ],
+    instructions: [
+      'Avocado in einer Schüssel zerdrücken bis eine cremige Masse entsteht',
+      'Honig und Joghurt hinzufügen und gut vermischen',
+      'Optional: Vitamin E Öl für extra Pflege hinzufügen',
+      'Gesicht reinigen und die Maske gleichmäßig auftragen',
+      '15-20 Minuten einwirken lassen',
+      'Mit lauwarmem Wasser abspülen und Gesicht trocken tupfen',
+      'Anschließend Ihre normale Feuchtigkeitscreme auftragen'
+    ],
+    benefits: [
+      'Intensive Feuchtigkeitspflege',
+      'Reich an Vitaminen A, D und E',
+      'Beruhigt gereizte Haut',
+      'Verbessert die Hautelastizität',
+      'Natürliche Anti-Aging Wirkung'
+    ],
+    image: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273',
+    isPremium: false,
+    rating: 4.8,
+    reviews: 234,
+    isFavorite: false,
+    tips: [
+      'Verwenden Sie nur reife Avocados für beste Ergebnisse',
+      'Testen Sie die Maske erst an einer kleinen Hautstelle',
+      'Ideal für trockene und normale Hauttypen'
+    ],
+    warnings: [
+      'Nicht bei Avocado-Allergie verwenden',
+      'Vermeiden Sie die Augenpartie'
+    ]
+  },
+  {
+    id: '2',
+    title: 'Grüntee Matcha Antioxidant Maske',
+    category: 'face',
+    difficulty: 'easy',
+    time: 20,
+    ingredients: [
+      '2 TL Matcha Pulver',
+      '1 EL Honig',
+      '1 EL Aloe Vera Gel',
+      '1 TL Haferflocken (fein gemahlen)'
+    ],
+    instructions: [
+      'Matcha Pulver mit warmem Wasser zu einer Paste anrühren',
+      'Honig und Aloe Vera Gel hinzufügen',
+      'Haferflocken unterrühren für sanfte Exfoliation',
+      'Auf das gereinigte Gesicht auftragen',
+      '15-20 Minuten einwirken lassen',
+      'Mit kreisenden Bewegungen und warmem Wasser abmassieren',
+      'Feuchtigkeitscreme auftragen'
+    ],
+    benefits: [
+      'Starke Antioxidantien gegen freie Radikale',
+      'Beruhigt entzündete Haut',
+      'Verfeinert das Hautbild',
+      'Verleiht natürlichen Glow',
+      'Strafft die Haut'
+    ],
+    image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883',
+    isPremium: false,
+    rating: 4.7,
+    reviews: 189,
+    isFavorite: false
+  },
+  {
+    id: '3',
+    title: 'Tonerde Detox Maske',
+    category: 'face',
+    difficulty: 'medium',
+    time: 25,
+    ingredients: [
+      '2 EL Bentonit Tonerde',
+      '1 EL Rosenwasser',
+      '1 TL Apfelessig',
+      '2 Tropfen Teebaumöl',
+      '1 TL Aloe Vera Gel'
+    ],
+    instructions: [
+      'Tonerde in einer Glasschüssel mit Rosenwasser vermischen',
+      'Apfelessig tropfenweise hinzufügen bis cremige Konsistenz',
+      'Teebaumöl und Aloe Vera Gel einrühren',
+      'Auf T-Zone und Problemzonen auftragen',
+      '15-20 Minuten trocknen lassen',
+      'Mit warmem Wasser und sanften Bewegungen entfernen',
+      'Beruhigende Feuchtigkeitscreme auftragen'
+    ],
+    benefits: [
+      'Zieht Unreinheiten und Giftstoffe aus den Poren',
+      'Reduziert überschüssigen Talg',
+      'Verfeinert vergrößerte Poren',
+      'Bekämpft Akne und Mitesser',
+      'Mattiert fettige Haut'
+    ],
+    image: 'https://images.unsplash.com/photo-1570554520606-2bbcaae9a3e1',
+    isPremium: true,
+    rating: 4.6,
+    reviews: 145,
+    isFavorite: false
+  },
+  {
+    id: '4',
+    title: 'Haferflocken Beruhigungs-Maske',
+    category: 'face',
+    difficulty: 'easy',
+    time: 15,
+    ingredients: [
+      '3 EL feine Haferflocken',
+      '2 EL warme Milch',
+      '1 TL Honig',
+      '1/2 TL Olivenöl'
+    ],
+    instructions: [
+      'Haferflocken in warmem Wasser 5 Minuten einweichen',
+      'Milch, Honig und Olivenöl hinzufügen',
+      'Zu einer dickflüssigen Paste verrühren',
+      'Auf das gereinigte Gesicht auftragen',
+      '15 Minuten einwirken lassen',
+      'Mit kreisenden Bewegungen sanft abmassieren',
+      'Mit lauwarmem Wasser abspülen'
+    ],
+    benefits: [
+      'Beruhigt sensible und gereizte Haut',
+      'Sanfte Exfoliation abgestorbener Hautzellen',
+      'Spendet Feuchtigkeit',
+      'Reduziert Rötungen',
+      'Ideal für empfindliche Haut'
+    ],
+    image: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58',
+    isPremium: false,
+    rating: 4.5,
+    reviews: 167,
+    isFavorite: false
+  },
+  {
+    id: '5',
+    title: 'Kurkuma Glow Maske',
+    category: 'face',
+    difficulty: 'medium',
+    time: 20,
+    ingredients: [
+      '1 TL Kurkuma Pulver',
+      '2 EL Kichererbsenmehl',
+      '2 EL Milch oder Buttermilch',
+      '1 TL Honig',
+      '2 Tropfen Rosenwasser'
+    ],
+    instructions: [
+      'Kurkuma und Kichererbsenmehl in einer Schüssel mischen',
+      'Milch langsam hinzufügen bis cremige Konsistenz',
+      'Honig und Rosenwasser einrühren',
+      'Gleichmäßig auf das Gesicht auftragen (Augen aussparen)',
+      '15-20 Minuten einwirken lassen bis trocken',
+      'Mit lauwarmem Wasser und sanften Bewegungen entfernen',
+      'Feuchtigkeitscreme auftragen'
+    ],
+    benefits: [
+      'Verleiht natürlichen Glow und Ausstrahlung',
+      'Entzündungshemmende Wirkung',
+      'Bekämpft Akne und Unreinheiten',
+      'Hellt Pigmentflecken auf',
+      'Traditionelle ayurvedische Schönheitspflege'
+    ],
+    image: 'https://images.unsplash.com/photo-1556909197-f5e4d94e8e36',
+    isPremium: true,
+    rating: 4.8,
+    reviews: 203,
+    isFavorite: false,
+    warnings: [
+      'Kann Kleidung und Handtücher gelb färben',
+      'Bei heller Haut kann temporäre gelbliche Verfärbung auftreten'
+    ]
+  },
+
+  // HAARMASKEN
+  {
+    id: '6',
+    title: 'Kokosöl Protein Haarmaske',
+    category: 'hair',
+    difficulty: 'easy',
+    time: 30,
+    ingredients: [
+      '3 EL Kokosöl',
+      '1 EL Honig',
+      '1 Ei (optional für extra Protein)',
+      '5 Tropfen Rosmarinöl'
+    ],
+    instructions: [
+      'Kokosöl bei Bedarf leicht erwärmen bis es flüssig ist',
+      'Honig und optional das Ei hinzufügen',
+      'Rosmarinöl für bessere Durchblutung einrühren',
+      'Haare anfeuchten und die Maske vom Ansatz bis in die Spitzen einmassieren',
+      '30-45 Minuten einwirken lassen (mit Handtuch umwickeln)',
+      'Gründlich mit Shampoo auswaschen (evtl. 2x shampoonieren)'
+    ],
+    benefits: [
+      'Tiefenwirksame Pflege',
+      'Repariert geschädigtes Haar',
+      'Verleiht Glanz und Geschmeidigkeit',
+      'Fördert das Haarwachstum',
+      'Reduziert Spliss'
+    ],
+    image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc',
+    isPremium: false,
+    rating: 4.9,
+    reviews: 456,
+    isFavorite: false,
+    videoUrl: 'https://example.com/hair-mask-tutorial'
+  },
+  {
+    id: '7',
+    title: 'Avocado Bananen Haarmaske',
+    category: 'hair',
+    difficulty: 'easy',
+    time: 25,
+    ingredients: [
+      '1/2 reife Avocado',
+      '1 reife Banane',
+      '2 EL Olivenöl',
+      '1 EL Honig',
+      '1 TL Zitronensaft'
+    ],
+    instructions: [
+      'Avocado und Banane gründlich zerdrücken bis keine Stücke mehr vorhanden',
+      'Olivenöl und Honig hinzufügen und gut vermischen',
+      'Zitronensaft für Glanz einrühren',
+      'Auf das feuchte Haar auftragen, besonders in die Längen und Spitzen',
+      '20-30 Minuten unter einer Duschhaube einwirken lassen',
+      'Gründlich mit warmem Wasser und Shampoo ausspülen'
+    ],
+    benefits: [
+      'Intensive Feuchtigkeitspflege für trockenes Haar',
+      'Reich an Vitaminen und Mineralien',
+      'Macht das Haar weich und geschmeidig',
+      'Repariert strapaziertes Haar',
+      'Verleiht natürlichen Glanz'
+    ],
+    image: 'https://images.unsplash.com/photo-1559181567-c3190ca9959b',
+    isPremium: false,
+    rating: 4.7,
+    reviews: 321,
+    isFavorite: false
+  },
+  {
+    id: '8',
+    title: 'Arganöl Repair Maske',
+    category: 'hair',
+    difficulty: 'medium',
+    time: 45,
+    ingredients: [
+      '3 EL Arganöl',
+      '2 EL Sheabutter',
+      '1 EL Aloe Vera Gel',
+      '5 Tropfen Lavendelöl',
+      '1 TL Vitamin E Öl'
+    ],
+    instructions: [
+      'Sheabutter im Wasserbad schmelzen und abkühlen lassen',
+      'Arganöl und Aloe Vera Gel einrühren',
+      'Lavendelöl und Vitamin E Öl hinzufügen',
+      'Von den Längen zu den Spitzen auftragen, Ansatz aussparen',
+      '30-45 Minuten oder über Nacht einwirken lassen',
+      'Mit mildem Shampoo gründlich auswaschen',
+      'Bei Bedarf Conditioner verwenden'
+    ],
+    benefits: [
+      'Repariert stark geschädigtes und chemisch behandeltes Haar',
+      'Intense Feuchtigkeitspflege',
+      'Reduziert Haarbruch und Spliss',
+      'Macht das Haar elastisch und widerstandsfähig',
+      'Beruhigt die Kopfhaut'
+    ],
+    image: 'https://images.unsplash.com/photo-1556228453-efd6c1ff04f6',
+    isPremium: true,
+    rating: 4.8,
+    reviews: 187,
+    isFavorite: false
+  },
+  {
+    id: '9',
+    title: 'Bier Volumen Maske',
+    category: 'hair',
+    difficulty: 'easy',
+    time: 20,
+    ingredients: [
+      '1/2 Tasse warmes Bier (alkoholfrei)',
+      '1 Eigelb',
+      '1 EL Honig',
+      '1 TL Olivenöl'
+    ],
+    instructions: [
+      'Bier offen stehen lassen bis es zimmerwarm und schal ist',
+      'Eigelb, Honig und Olivenöl hinzufügen',
+      'Alle Zutaten gut vermischen',
+      'Auf das feuchte Haar auftragen, besonders am Ansatz',
+      '15-20 Minuten einwirken lassen',
+      'Mit kühlem Wasser und mildem Shampoo ausspülen'
+    ],
+    benefits: [
+      'Verleiht Volumen und Fülle',
+      'Stärkt die Haarstruktur',
+      'Verleiht natürlichen Glanz',
+      'Reinigt sanft ohne auszutrocknen',
+      'Reich an B-Vitaminen'
+    ],
+    image: 'https://images.unsplash.com/photo-1574263867128-ed78e8151786',
+    isPremium: false,
+    rating: 4.4,
+    reviews: 143,
+    isFavorite: false
+  },
+  {
+    id: '10',
+    title: 'Reismehl Protein Maske',
+    category: 'hair',
+    difficulty: 'medium',
+    time: 35,
+    ingredients: [
+      '3 EL Reismehl',
+      '1/2 Tasse Kokosmilch',
+      '1 EL Honig',
+      '1 TL Jojobaöl',
+      '3 Tropfen Ylang-Ylang Öl'
+    ],
+    instructions: [
+      'Reismehl mit warmer Kokosmilch zu einer Paste anrühren',
+      '10 Minuten quellen lassen',
+      'Honig, Jojobaöl und ätherisches Öl einrühren',
+      'Gleichmäßig auf das gewaschene, handtuchtrockene Haar auftragen',
+      '25-30 Minuten einwirken lassen',
+      'Gründlich mit lauwarmem Wasser ausspülen',
+      'Conditioner verwenden'
+    ],
+    benefits: [
+      'Stärkt schwaches und brüchiges Haar',
+      'Verleiht Protein für mehr Elastizität',
+      'Macht das Haar glänzend und geschmeidig',
+      'Beruhigt die Kopfhaut',
+      'Ideal für coloriertes Haar'
+    ],
+    image: 'https://images.unsplash.com/photo-1598300042247-d088f8ab3a91',
+    isPremium: true,
+    rating: 4.6,
+    reviews: 98,
+    isFavorite: false
+  },
+  {
+    id: '11',
+    title: 'Rizinusöl Wachstums-Maske',
+    category: 'hair',
+    difficulty: 'easy',
+    time: 60,
+    ingredients: [
+      '2 EL Rizinusöl',
+      '1 EL Kokosöl',
+      '5 Tropfen Rosmarinöl',
+      '3 Tropfen Pfefferminzöl',
+      '1 TL Honig'
+    ],
+    instructions: [
+      'Rizinusöl und Kokosöl leicht erwärmen',
+      'Ätherische Öle und Honig hinzufügen',
+      'Gut vermischen und auf Zimmertemperatur abkühlen',
+      'In die Kopfhaut einmassieren mit kreisenden Bewegungen',
+      'Durch die Längen verteilen',
+      '45-60 Minuten oder über Nacht einwirken lassen',
+      'Mit Shampoo gründlich auswaschen (2-3x wenn nötig)'
+    ],
+    benefits: [
+      'Stimuliert das Haarwachstum',
+      'Stärkt die Haarwurzeln',
+      'Verleiht Glanz und Geschmeidigkeit',
+      'Reduziert Haarausfall',
+      'Nährt die Kopfhaut intensiv'
+    ],
+    image: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796',
+    isPremium: true,
+    rating: 4.7,
+    reviews: 278,
+    isFavorite: false
+  },
+
+  // KÖRPERPEELINGS & MASKEN
+  {
+    id: '12',
+    title: 'Kaffee-Peeling für strahlende Haut',
+    category: 'body',
+    difficulty: 'easy',
+    time: 10,
+    ingredients: [
+      '1/2 Tasse Kaffeesatz',
+      '1/4 Tasse Kokosöl',
+      '1/4 Tasse brauner Zucker',
+      '1 TL Vanilleextrakt'
+    ],
+    instructions: [
+      'Alle Zutaten in einer Schüssel vermischen',
+      'Unter der Dusche auf die feuchte Haut auftragen',
+      'In kreisenden Bewegungen einmassieren',
+      '5-10 Minuten einwirken lassen',
+      'Mit warmem Wasser abspülen'
+    ],
+    benefits: [
+      'Entfernt abgestorbene Hautzellen',
+      'Regt die Durchblutung an',
+      'Kann Cellulite mindern',
+      'Macht die Haut weich und glatt'
+    ],
+    image: 'https://images.unsplash.com/photo-1570554520913-ce3192c34509',
+    isPremium: true,
+    rating: 4.7,
+    reviews: 189,
+    isFavorite: false
+  },
+  {
+    id: '13',
+    title: 'Meersalz Detox Peeling',
+    category: 'body',
+    difficulty: 'easy',
+    time: 15,
+    ingredients: [
+      '1/2 Tasse grobes Meersalz',
+      '1/4 Tasse Olivenöl',
+      '2 EL Honig',
+      '10 Tropfen Zitronenöl',
+      '1 TL getrockneter Rosmarin'
+    ],
+    instructions: [
+      'Meersalz und getrockneten Rosmarin vermischen',
+      'Olivenöl und Honig hinzufügen',
+      'Zitronenöl einrühren',
+      'Auf die feuchte Haut auftragen',
+      'Mit kreisenden Bewegungen 3-5 Minuten massieren',
+      'Gründlich mit warmem Wasser abspülen',
+      'Feuchtigkeitscreme auftragen'
+    ],
+    benefits: [
+      'Entgiftet und reinigt die Haut porentief',
+      'Entfernt abgestorbene Hautzellen',
+      'Stimuliert die Durchblutung',
+      'Macht die Haut samtig weich',
+      'Belebt müde Haut'
+    ],
+    image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b',
+    isPremium: false,
+    rating: 4.5,
+    reviews: 156,
+    isFavorite: false
+  },
+  {
+    id: '14',
+    title: 'Zucker-Zimt Peeling',
+    category: 'body',
+    difficulty: 'easy',
+    time: 12,
+    ingredients: [
+      '3/4 Tasse brauner Zucker',
+      '1/3 Tasse Mandelöl',
+      '1 TL gemahlener Zimt',
+      '1 TL Vanilleextrakt',
+      '2 EL Honig'
+    ],
+    instructions: [
+      'Zucker und Zimt in einer Schüssel vermischen',
+      'Mandelöl langsam hinzufügen und rühren',
+      'Vanilleextrakt und Honig unterrühren',
+      'Auf die feuchte Haut auftragen',
+      'Sanft in kreisenden Bewegungen einmassieren',
+      '2-3 Minuten einwirken lassen',
+      'Mit lauwarmem Wasser abspülen'
+    ],
+    benefits: [
+      'Sanfte Exfoliation für empfindliche Haut',
+      'Verbessert die Hautdurchblutung',
+      'Spendet intensive Feuchtigkeit',
+      'Hinterlässt angenehmen Duft',
+      'Macht die Haut babyzart'
+    ],
+    image: 'https://images.unsplash.com/photo-1596957997851-b4de7c4bbf55',
+    isPremium: false,
+    rating: 4.6,
+    reviews: 201,
+    isFavorite: false
+  },
+  {
+    id: '15',
+    title: 'Grüner Tee Körpermaske',
+    category: 'body',
+    difficulty: 'medium',
+    time: 25,
+    ingredients: [
+      '4 Beutel grüner Tee',
+      '1 Tasse heißes Wasser',
+      '3 EL Tonerde',
+      '2 EL Honig',
+      '1 EL Joghurt'
+    ],
+    instructions: [
+      'Tee mit heißem Wasser aufgießen und 10 Minuten ziehen lassen',
+      'Teebeutel entfernen und Tee abkühlen lassen',
+      '4 EL des Tees mit Tonerde vermischen',
+      'Honig und Joghurt einrühren bis cremige Konsistenz',
+      'Auf die gereinigte Haut auftragen',
+      '15-20 Minuten einwirken lassen',
+      'Mit lauwarmem Wasser abspülen'
+    ],
+    benefits: [
+      'Antioxidantien bekämpfen freie Radikale',
+      'Beruhigt gereizte und entzündete Haut',
+      'Strafft und festigt die Haut',
+      'Reduziert Hautrötungen',
+      'Verleiht einen gesunden Glow'
+    ],
+    image: 'https://images.unsplash.com/photo-1559181567-c3190ca9959b',
+    isPremium: true,
+    rating: 4.4,
+    reviews: 123,
+    isFavorite: false
+  },
+
+  // LIPPENPEELING & PFLEGE
+  {
+    id: '16',
+    title: 'Honig-Zimt Lippenpeeling',
+    category: 'lips',
+    difficulty: 'easy',
+    time: 5,
+    ingredients: [
+      '1 TL Honig',
+      '1 TL brauner Zucker',
+      '1/2 TL Zimt',
+      '1/2 TL Kokosöl'
+    ],
+    instructions: [
+      'Alle Zutaten vermischen',
+      'Sanft auf die Lippen auftragen',
+      '1-2 Minuten massieren',
+      'Mit warmem Wasser abspülen',
+      'Lippenbalsam auftragen'
+    ],
+    benefits: [
+      'Entfernt trockene Hautschüppchen',
+      'Macht die Lippen weich',
+      'Regt die Durchblutung an',
+      'Natürliches Volumen'
+    ],
+    image: 'https://images.unsplash.com/photo-1583248369069-9d91f1640fe6',
+    isPremium: false,
+    rating: 4.9,
+    reviews: 321,
+    isFavorite: false
+  },
+  {
+    id: '17',
+    title: 'Vanille-Zucker Lippenpeeling',
+    category: 'lips',
+    difficulty: 'easy',
+    time: 8,
+    ingredients: [
+      '2 TL feiner Zucker',
+      '1 TL Honig',
+      '1/2 TL Vanilleextrakt',
+      '1 TL Kokosöl',
+      '2 Tropfen Vitamin E Öl'
+    ],
+    instructions: [
+      'Zucker und Kokosöl vermischen',
+      'Honig und Vanilleextrakt hinzufügen',
+      'Vitamin E Öl einrühren',
+      'Mit dem Finger sanft auf die Lippen auftragen',
+      'In kreisenden Bewegungen 1-2 Minuten massieren',
+      'Mit einem feuchten Tuch abnehmen',
+      'Lippenbalsam auftragen'
+    ],
+    benefits: [
+      'Sanfte Exfoliation ohne Irritationen',
+      'Spendet intensive Feuchtigkeit',
+      'Verleiht natürlichen Glanz',
+      'Bereitet die Lippen für Lippenstift vor',
+      'Angenehmer Vanilleduft'
+    ],
+    image: 'https://images.unsplash.com/photo-1596755389378-c31d21fd1273',
+    isPremium: false,
+    rating: 4.7,
+    reviews: 187,
+    isFavorite: false
+  },
+  {
+    id: '18',
+    title: 'Kaffee Lippenpeeling',
+    category: 'lips',
+    difficulty: 'easy',
+    time: 6,
+    ingredients: [
+      '1 TL fein gemahlener Kaffee',
+      '1 TL brauner Zucker',
+      '1 TL Honig',
+      '1/2 TL Olivenöl'
+    ],
+    instructions: [
+      'Kaffee und Zucker mischen',
+      'Honig und Olivenöl hinzufügen',
+      'Zu einer Paste verrühren',
+      'Sanft auf die Lippen auftragen',
+      '1 Minute vorsichtig massieren',
+      'Mit lauwarmem Wasser abspülen',
+      'Pflegenden Lippenbalsam auftragen'
+    ],
+    benefits: [
+      'Entfernt abgestorbene Hautzellen',
+      'Regt die Durchblutung an für vollere Lippen',
+      'Macht die Lippen glatt und weich',
+      'Bereitet optimal für Lippenpflege vor',
+      'Natürliches Koffein belebt'
+    ],
+    image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b',
+    isPremium: false,
+    rating: 4.6,
+    reviews: 143,
+    isFavorite: false
+  },
+  {
+    id: '19',
+    title: 'Rosenzucker Luxus-Lippenpeeling',
+    category: 'lips',
+    difficulty: 'medium',
+    time: 10,
+    ingredients: [
+      '2 TL feiner Zucker',
+      '1 TL Rosenwasser',
+      '1 TL Sheabutter',
+      '3 Tropfen Rosenöl',
+      '1/2 TL Honig'
+    ],
+    instructions: [
+      'Sheabutter leicht erwärmen bis weich',
+      'Zucker und Rosenwasser vermischen',
+      'Sheabutter und Honig hinzufügen',
+      'Rosenöl einrühren',
+      'Gleichmäßig auf die Lippen auftragen',
+      '2-3 Minuten sanft einmassieren',
+      'Mit einem weichen Tuch abnehmen',
+      'Intensive Lippenpflege auftragen'
+    ],
+    benefits: [
+      'Luxuriöse Pflege für besonders trockene Lippen',
+      'Intensive Feuchtigkeitsspende',
+      'Anti-Aging Wirkung für die Lippen',
+      'Verleiht natürliche Rosé-Tönung',
+      'Eleganter Rosenduft'
+    ],
+    image: 'https://images.unsplash.com/photo-1582735689369-4fe89db7114c',
+    isPremium: true,
+    rating: 4.8,
+    reviews: 95,
+    isFavorite: false
+  },
+
+  // WEITERE GESICHTSMASKEN
+  {
+    id: '20',
+    title: 'Gurken Aloe Vera Beruhigungsmaske',
+    category: 'face',
+    difficulty: 'easy',
+    time: 20,
+    ingredients: [
+      '1/2 Gurke',
+      '3 EL Aloe Vera Gel',
+      '1 EL Honig',
+      '1 TL Rosenwasser',
+      '5 Tropfen Kamillenöl'
+    ],
+    instructions: [
+      'Gurke schälen und in einem Mixer pürieren',
+      'Gurkenpüree durch ein Sieb streichen',
+      'Aloe Vera Gel und Honig hinzufügen',
+      'Rosenwasser und Kamillenöl einrühren',
+      'Auf das gereinigte Gesicht auftragen',
+      '15-20 Minuten einwirken lassen',
+      'Mit kaltem Wasser abspülen'
+    ],
+    benefits: [
+      'Beruhigt gereizte und gerötete Haut',
+      'Kühlt und erfrischt',
+      'Spendet intensive Feuchtigkeit',
+      'Reduziert Schwellungen',
+      'Ideal nach Sonnenbad'
+    ],
+    image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883',
+    isPremium: false,
+    rating: 4.5,
+    reviews: 234,
+    isFavorite: false
+  },
+  {
+    id: '21',
+    title: 'Papaya Enzym Peeling-Maske',
+    category: 'face',
+    difficulty: 'medium',
+    time: 15,
+    ingredients: [
+      '1/4 reife Papaya',
+      '1 EL Honig',
+      '1 TL Haferflocken (fein gemahlen)',
+      '1 TL Zitronensaft',
+      '2 EL Joghurt'
+    ],
+    instructions: [
+      'Papaya schälen und zu Brei zerdrücken',
+      'Honig und Joghurt hinzufügen',
+      'Haferflocken und Zitronensaft einrühren',
+      'Gleichmäßig auf das Gesicht auftragen',
+      '10-15 Minuten einwirken lassen',
+      'Mit kreisenden Bewegungen sanft abmassieren',
+      'Mit lauwarmem Wasser abspülen'
+    ],
+    benefits: [
+      'Natürliche Enzyme entfernen abgestorbene Hautzellen',
+      'Hellt Pigmentflecken auf',
+      'Verleiht strahlenden Teint',
+      'Verfeinert das Hautbild',
+      'Reich an Vitamin C'
+    ],
+    image: 'https://images.unsplash.com/photo-1578916171728-46686eac8d58',
+    isPremium: true,
+    rating: 4.7,
+    reviews: 176,
+    isFavorite: false
+  },
+  {
+    id: '22',
+    title: 'Schwarze Aktivkohle Maske',
+    category: 'face',
+    difficulty: 'medium',
+    time: 25,
+    ingredients: [
+      '1 TL Aktivkohle Pulver',
+      '2 EL Bentonit Tonerde',
+      '1 EL Rosenwasser',
+      '1 TL Teebaumöl',
+      '1 EL Aloe Vera Gel'
+    ],
+    instructions: [
+      'Aktivkohle und Tonerde in einer Glasschüssel mischen',
+      'Rosenwasser langsam hinzufügen',
+      'Teebaumöl und Aloe Vera Gel einrühren',
+      'Zu einer glatten Paste verrühren',
+      'Auf T-Zone und Problemzonen auftragen',
+      '15-20 Minuten trocknen lassen',
+      'Mit warmem Wasser und sanften Bewegungen entfernen'
+    ],
+    benefits: [
+      'Zieht Giftstoffe und Unreinheiten aus den Poren',
+      'Bekämpft hartnäckige Mitesser',
+      'Mattiert fettige Haut',
+      'Verfeinert vergrößerte Poren',
+      'Ideal für unreine Haut'
+    ],
+    image: 'https://images.unsplash.com/photo-1556909197-f5e4d94e8e36',
+    isPremium: true,
+    rating: 4.6,
+    reviews: 198,
+    isFavorite: false
+  },
+
+  // WEITERE HAARMASKEN
+  {
+    id: '23',
+    title: 'Zwiebel Anti-Haarausfall Maske',
+    category: 'hair',
+    difficulty: 'medium',
+    time: 45,
+    ingredients: [
+      '1 mittelgroße Zwiebel',
+      '2 EL Honig',
+      '1 EL Olivenöl',
+      '5 Tropfen Rosmarinöl',
+      '1 TL Zitronensaft'
+    ],
+    instructions: [
+      'Zwiebel schälen und fein pürieren',
+      'Zwiebelsaft durch ein Tuch pressen',
+      'Honig, Olivenöl und Zitronensaft hinzufügen',
+      'Rosmarinöl einrühren',
+      'In die Kopfhaut einmassieren',
+      '30-45 Minuten einwirken lassen',
+      'Gründlich mit Shampoo und viel Wasser auswaschen'
+    ],
+    benefits: [
+      'Stimuliert die Haarwurzeln und fördert Wachstum',
+      'Verbessert die Durchblutung der Kopfhaut',
+      'Stärkt schwache Haarwurzeln',
+      'Reduziert Haarausfall',
+      'Reich an Schwefel für gesundes Haar'
+    ],
+    image: 'https://images.unsplash.com/photo-1512496015851-a90fb38ba796',
+    isPremium: true,
+    rating: 4.5,
+    reviews: 167,
+    isFavorite: false,
+    warnings: [
+      'Starker Geruch - gründlich auswaschen',
+      'Nicht bei empfindlicher Kopfhaut anwenden'
+    ]
+  },
+  {
+    id: '24',
+    title: 'Joghurt Protein Maske',
+    category: 'hair',
+    difficulty: 'easy',
+    time: 30,
+    ingredients: [
+      '1/2 Tasse griechischer Joghurt',
+      '1 EL Honig',
+      '2 EL Olivenöl',
+      '1 TL Apfelessig',
+      '5 Tropfen Lavendelöl'
+    ],
+    instructions: [
+      'Joghurt auf Zimmertemperatur bringen',
+      'Honig und Olivenöl hinzufügen',
+      'Apfelessig und Lavendelöl einrühren',
+      'Auf das feuchte Haar auftragen',
+      'Besonders in die Längen und Spitzen einarbeiten',
+      '20-30 Minuten unter einer Duschhaube lassen',
+      'Mit lauwarmem Wasser und mildem Shampoo ausspülen'
+    ],
+    benefits: [
+      'Versorgt das Haar mit wichtigen Proteinen',
+      'Stärkt die Haarstruktur',
+      'Verleiht Glanz und Geschmeidigkeit',
+      'Beruhigt die Kopfhaut',
+      'Ideal für strapaziertes Haar'
+    ],
+    image: 'https://images.unsplash.com/photo-1574263867128-ed78e8151786',
+    isPremium: false,
+    rating: 4.6,
+    reviews: 211,
+    isFavorite: false
+  },
+  {
+    id: '25',
+    title: 'Grüner Tee Kopfhaut Maske',
+    category: 'hair',
+    difficulty: 'easy',
+    time: 25,
+    ingredients: [
+      '3 Beutel grüner Tee',
+      '1 Tasse heißes Wasser',
+      '2 EL Honig',
+      '1 EL Kokosöl',
+      '5 Tropfen Pfefferminzöl'
+    ],
+    instructions: [
+      'Tee mit heißem Wasser aufbrühen und 15 Minuten ziehen lassen',
+      'Teebeutel entfernen und Tee abkühlen lassen',
+      'Honig und Kokosöl in den warmen Tee einrühren',
+      'Pfefferminzöl hinzufügen',
+      'In die Kopfhaut einmassieren',
+      '20 Minuten einwirken lassen',
+      'Mit lauwarmem Wasser ausspülen'
+    ],
+    benefits: [
+      'Beruhigt gereizte Kopfhaut',
+      'Antioxidantien schützen die Haarwurzeln',
+      'Reduziert Schuppen und Juckreiz',
+      'Erfrischt und belebt',
+      'Fördert gesundes Haarwachstum'
+    ],
+    image: 'https://images.unsplash.com/photo-1559181567-c3190ca9959b',
+    isPremium: false,
+    rating: 4.4,
+    reviews: 134,
+    isFavorite: false
+  },
+
+  // SPEZIELLE TREATMENTS
+  {
+    id: '26',
+    title: 'Rosen-Gesichtsdampfbad',
+    category: 'face',
+    difficulty: 'easy',
+    time: 15,
+    ingredients: [
+      '2 Liter heißes Wasser',
+      '1/4 Tasse getrocknete Rosenblüten',
+      '5 Tropfen Rosenöl',
+      '2 EL Kamillentee',
+      '1 großes Handtuch'
+    ],
+    instructions: [
+      'Heißes Wasser in eine große Schüssel geben',
+      'Rosenblüten und Kamillentee hinzufügen',
+      'Rosenöl ins Wasser träufeln',
+      'Gesicht über die Schüssel halten (30cm Abstand)',
+      'Kopf und Schüssel mit Handtuch bedecken',
+      '10-15 Minuten dampfen lassen',
+      'Gesicht mit kaltem Wasser abspülen'
+    ],
+    benefits: [
+      'Öffnet die Poren für tiefe Reinigung',
+      'Verbessert die Durchblutung',
+      'Spendet intensive Feuchtigkeit',
+      'Beruhigt gestresste Haut',
+      'Entspannt und wirkt aromatherapeutisch'
+    ],
+    image: 'https://images.unsplash.com/photo-1582735689369-4fe89db7114c',
+    isPremium: false,
+    rating: 4.7,
+    reviews: 189,
+    isFavorite: false
+  },
+  {
+    id: '27',
+    title: 'Henna Haar Glanz Treatment',
+    category: 'hair',
+    difficulty: 'hard',
+    time: 120,
+    ingredients: [
+      '100g farbloses Henna Pulver',
+      '1 Tasse warmes Wasser',
+      '2 EL Zitronensaft',
+      '1 EL Honig',
+      '2 EL Joghurt',
+      '1 TL Fenugreek Pulver'
+    ],
+    instructions: [
+      'Henna Pulver mit warmem Wasser zu einer Paste anrühren',
+      '2 Stunden ziehen lassen',
+      'Zitronensaft, Honig und Joghurt hinzufügen',
+      'Fenugreek Pulver einrühren',
+      'Gleichmäßig auf das gewaschene Haar auftragen',
+      '60-90 Minuten einwirken lassen',
+      'Gründlich mit Wasser ausspülen (ohne Shampoo)',
+      'Am nächsten Tag erst shampoonieren'
+    ],
+    benefits: [
+      'Verleiht intensiven Glanz',
+      'Stärkt und verdickt das Haar',
+      'Reduziert Haarbruch',
+      'Nährt die Kopfhaut',
+      'Natürliche Haarkonditionierung'
+    ],
+    image: 'https://images.unsplash.com/photo-1556228453-efd6c1ff04f6',
+    isPremium: true,
+    rating: 4.8,
+    reviews: 145,
+    isFavorite: false,
+    warnings: [
+      'Kann bei hellem Haar leicht färben',
+      'Patch-Test empfohlen'
+    ]
+  },
+
+  // LUXUS TREATMENTS
+  {
+    id: '28',
+    title: 'Gold Lifting Gesichtsmaske',
+    category: 'face',
+    difficulty: 'hard',
+    time: 30,
+    ingredients: [
+      '1 Blatt Blattgold (essbar)',
+      '2 EL Honig',
+      '1 EL Arganöl',
+      '1 TL Hyaluronsäure Serum',
+      '5 Tropfen Vitamin C Serum',
+      '1 EL Aloe Vera Gel'
+    ],
+    instructions: [
+      'Honig leicht erwärmen',
+      'Arganöl und Aloe Vera Gel hinzufügen',
+      'Hyaluronsäure und Vitamin C Serum einrühren',
+      'Blattgold vorsichtig in kleine Stücke zerteilen',
+      'Maske auf das gereinigte Gesicht auftragen',
+      'Goldstücke sanft eindrücken',
+      '20-25 Minuten einwirken lassen',
+      'Mit lauwarmem Wasser abspülen'
+    ],
+    benefits: [
+      'Intensive Anti-Aging Wirkung',
+      'Strafft und festigt die Haut',
+      'Verleiht luxuriösen Glow',
+      'Regt die Kollagenproduktion an',
+      'Reduziert feine Linien'
+    ],
+    image: 'https://images.unsplash.com/photo-1556909197-f5e4d94e8e36',
+    isPremium: true,
+    rating: 4.9,
+    reviews: 87,
+    isFavorite: false
+  },
+  {
+    id: '29',
+    title: 'Kaviar Luxus Haarmaske',
+    category: 'hair',
+    difficulty: 'hard',
+    time: 45,
+    ingredients: [
+      '2 EL Kaviar Extrakt (oder 1 TL echter Kaviar)',
+      '3 EL Arganöl',
+      '2 EL Sheabutter',
+      '1 EL Keratin Serum',
+      '5 Tropfen Rosenöl',
+      '1 Eigelb'
+    ],
+    instructions: [
+      'Sheabutter im Wasserbad schmelzen',
+      'Arganöl und Keratin Serum hinzufügen',
+      'Kaviar Extrakt und Eigelb einrühren',
+      'Rosenöl hinzufügen',
+      'Gut vermischen',
+      'Auf das feuchte Haar auftragen',
+      '30-45 Minuten unter Wärmehaube einwirken lassen',
+      'Gründlich mit luxuriösem Shampoo auswaschen'
+    ],
+    benefits: [
+      'Ultimative Luxuspflege für das Haar',
+      'Reich an Aminosäuren und Vitaminen',
+      'Repariert stark geschädigtes Haar',
+      'Verleiht seidige Geschmeidigkeit',
+      'Anti-Aging für die Haare'
+    ],
+    image: 'https://images.unsplash.com/photo-1608248597279-f99d160bfcbc',
+    isPremium: true,
+    rating: 4.9,
+    reviews: 65,
+    isFavorite: false
+  },
+  {
+    id: '30',
+    title: 'Platin Collagen Augenpads',
+    category: 'face',
+    difficulty: 'medium',
+    time: 20,
+    ingredients: [
+      '2 EL Collagen Pulver',
+      '3 EL destilliertes Wasser',
+      '1 TL Platin Serum',
+      '5 Tropfen Hyaluronsäure',
+      '2 runde Wattepads',
+      '1 TL Kamillenextrakt'
+    ],
+    instructions: [
+      'Collagen Pulver mit destilliertem Wasser anrühren',
+      '10 Minuten quellen lassen',
+      'Platin Serum und Hyaluronsäure hinzufügen',
+      'Kamillenextrakt einrühren',
+      'Wattepads in der Mischung tränken',
+      'Auf die gereinigte Augenpartie auflegen',
+      '15-20 Minuten einwirken lassen',
+      'Vorsichtig abnehmen und Augencreme auftragen'
+    ],
+    benefits: [
+      'Reduziert Augenringe und Schwellungen',
+      'Strafft die empfindliche Augenpartie',
+      'Füllt feine Linien auf',
+      'Intensive Feuchtigkeitspflege',
+      'Luxuriöse Anti-Aging Behandlung'
+    ],
+    image: 'https://images.unsplash.com/photo-1556228578-8c89e6adf883',
+    isPremium: true,
+    rating: 4.8,
+    reviews: 92,
+    isFavorite: false
+  }
+];
       setRecipes(recipesData);
 
       // Load favorites
