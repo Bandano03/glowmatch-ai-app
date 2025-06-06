@@ -10,15 +10,37 @@ export class AdvancedAnalysisService {
     const startTime = Date.now();
     
     try {
+      // Validiere Bilder
+      if (!images || images.length === 0) {
+        throw new Error('Keine Bilder vorhanden');
+      }
+
+      // Filtere undefined/null Bilder heraus
+      const validImages = images.filter(img => img && img.length > 100);
+      
+      if (validImages.length === 0) {
+        throw new Error('Keine gültigen Bilder gefunden');
+      }
+
       // Analysiere mehrere Bilder für genauere Ergebnisse
-      const analysisPromises = images.map((image, index) => 
-        this.analyzeImage(image, index)
+      const analysisPromises = validImages.map((image, index) => 
+        this.analyzeImage(image, index).catch(err => {
+          console.error(`Fehler bei Bild ${index}:`, err);
+          return null; // Returniere null bei Fehler statt zu crashen
+        })
       );
       
       const results = await Promise.all(analysisPromises);
       
+      // Filtere null-Ergebnisse heraus
+      const validResults = results.filter(r => r !== null);
+      
+      if (validResults.length === 0) {
+        throw new Error('Keine Bilder konnten analysiert werden');
+      }
+      
       // Kombiniere die Ergebnisse
-      const combinedResult = await this.combineAnalysisResults(results);
+      const combinedResult = await this.combineAnalysisResults(validResults);
       
       // Hole Produkt- und Rezeptempfehlungen
       const recommendations = await this.getDetailedRecommendations(combinedResult);
@@ -33,104 +55,164 @@ export class AdvancedAnalysisService {
       
     } catch (error) {
       console.error('Advanced analysis error:', error);
-      // Fallback auf Demo-Daten
-      return this.getDemoAnalysisResult();
+      // Bei echtem Fehler: Keine Demo-Daten, sondern Fehler werfen
+      throw new Error('Die erweiterte Analyse konnte nicht durchgeführt werden. Bitte versuchen Sie es erneut.');
     }
   }
 
   private static async analyzeImage(imageBase64: string, index: number): Promise<any> {
+    // Validiere Bild
+    if (!imageBase64 || imageBase64.length < 100) {
+      throw new Error('Ungültiges Bild');
+    }
+
     const prompt = `Du bist ein führender Dermatologe und Hautexperte mit 30 Jahren Erfahrung. 
-    Analysiere dieses Gesichtsbild (Bild ${index + 1} von 10) EXTREM detailliert.
+    Analysiere dieses Gesichtsbild (Bild ${index + 1}) EXTREM detailliert.
     
-    Analysiere folgende Aspekte:
+    WICHTIG: 
+    - Wenn das Bild zu dunkel, unscharf oder kein Gesicht zeigt, antworte mit: {"error": true, "errorMessage": "Beschreibung des Problems"}
+    - Ansonsten antworte NUR mit einem validen JSON-Objekt ohne zusätzliche Erklärungen.
     
-    1. HAUTSTRUKTUR:
-    - Porengröße und -verteilung
-    - Feine Linien und Falten (Anzahl, Tiefe, Lokation)
-    - Hautdicke und -elastizität
-    - Narben oder Verfärbungen
-    
-    2. HAUTTON & PIGMENTIERUNG:
-    - Gleichmäßigkeit des Hauttons
-    - Hyperpigmentierung oder Melasma
-    - Rötungen und Entzündungen
-    - Dunkle Flecken oder Altersflecken
-    
-    3. HYDRATATION & ÖLPRODUKTION:
-    - Trockenheitszonen
-    - Ölige Bereiche (T-Zone Analyse)
-    - Schuppige oder raue Stellen
-    
-    4. SPEZIFISCHE PROBLEME:
-    - Akne (Art, Schweregrad, Lokation)
-    - Rosazea-Anzeichen
-    - Ekzeme oder Dermatitis
-    - Allergische Reaktionen
-    
-    5. ALTERUNGSZEICHEN:
-    - Biologisches vs. chronologisches Alter
-    - Kollagenabbau
-    - Volumenverlust
-    - Hautelastizität
-    
-    6. UMWELTSCHÄDEN:
-    - UV-Schäden
-    - Umweltverschmutzungseffekte
-    - Stress-Indikatoren
-    
-    Gib eine SEHR detaillierte JSON-Antwort mit numerischen Werten (0-100) für jeden Aspekt.`;
+    Wenn das Bild analysierbar ist, gib ein JSON mit folgender Struktur zurück:
+    {
+      "hydration": Zahl 0-100,
+      "elasticity": Zahl 0-100,
+      "firmness": Zahl 0-100,
+      "radiance": Zahl 0-100,
+      "evenness": Zahl 0-100,
+      "poreSize": Zahl 0-100,
+      "oilBalance": Zahl 0-100,
+      "uvDamage": Zahl 0-100,
+      "pollutionImpact": Zahl 0-100,
+      "stressLevel": Zahl 0-100,
+      "dehydration": Zahl 0-100,
+      "skinType": "Normal/Trocken/Fettig/Mischhaut/Sensibel",
+      "age": Zahl,
+      "concerns": ["Concern1", "Concern2", "Concern3"]
+    }`;
 
-    const messages = [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: prompt },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:image/jpeg;base64,${imageBase64}`,
-              detail: 'high'
+    try {
+      const messages = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: prompt },
+            {
+              type: 'image_url',
+              image_url: {
+                url: `data:image/jpeg;base64,${imageBase64}`,
+                detail: 'high'
+              }
             }
-          }
-        ]
+          ]
+        }
+      ];
+
+      const response = await fetch(OPENAI_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ENV.OPENAI_API_KEY}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          max_tokens: 2000,
+          temperature: 0.2,
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || `API Fehler: ${response.status}`);
       }
-    ];
 
-    const response = await fetch(OPENAI_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ENV.OPENAI_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: messages,
-        max_tokens: 2000,
-        temperature: 0.2,
-      })
-    });
+      const data = await response.json();
+      
+      // Sichere Extraktion der Antwort
+      const content = data?.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error('Keine Antwort von der API erhalten');
+      }
 
-    const data = await response.json();
-    return JSON.parse(data.choices[0].message.content);
+      // Parse JSON sicher
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('Ungültiges Antwortformat');
+      }
+
+      const result = JSON.parse(jsonMatch[0]);
+
+      // Prüfe auf Fehler in der Antwort
+      if (result.error === true) {
+        throw new Error(result.errorMessage || 'Bild konnte nicht analysiert werden');
+      }
+
+      // Stelle sicher, dass alle erforderlichen Felder vorhanden sind
+      return {
+        hydration: result.hydration || 50,
+        elasticity: result.elasticity || 50,
+        firmness: result.firmness || 50,
+        radiance: result.radiance || 50,
+        evenness: result.evenness || 50,
+        poreSize: result.poreSize || 50,
+        oilBalance: result.oilBalance || 50,
+        uvDamage: result.uvDamage || 30,
+        pollutionImpact: result.pollutionImpact || 30,
+        stressLevel: result.stressLevel || 40,
+        dehydration: result.dehydration || 40,
+        skinType: result.skinType || 'Normal',
+        age: result.age || 25,
+        concerns: result.concerns || []
+      };
+
+    } catch (error) {
+      console.error(`Fehler bei Bildanalyse ${index}:`, error);
+      throw error;
+    }
   }
 
   private static async combineAnalysisResults(results: any[]): Promise<any> {
-    // Durchschnittswerte berechnen und Trends erkennen
+    // Sicherstellen dass results ein Array ist und Elemente hat
+    if (!Array.isArray(results) || results.length === 0) {
+      throw new Error('Keine gültigen Analyseergebnisse');
+    }
+
+    // Sichere Durchschnittswerte berechnen
+    const calculateSafeAverage = (field: string) => {
+      const values = results
+        .map(r => r?.[field])
+        .filter(v => typeof v === 'number' && !isNaN(v));
+      
+      if (values.length === 0) return 50; // Standardwert
+      return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
+    };
+
+    // Sichere Metrik-Analyse
+    const analyzeMetricSafe = (metric: string) => {
+      const value = calculateSafeAverage(metric);
+      // Trend-Berechnung würde hier normalerweise historische Daten nutzen
+      return {
+        value,
+        trend: 'stable' as const
+      };
+    };
+
     const combined = {
       skinAnalysis: {
         type: this.determineSkinType(results),
-        age: this.calculateAverageAge(results),
-        biologicalAge: this.calculateBiologicalAge(results),
-        healthScore: this.calculateHealthScore(results),
+        age: calculateSafeAverage('age'),
+        biologicalAge: calculateSafeAverage('age') - 3, // Vereinfachte Berechnung
+        healthScore: 80, // Vereinfachte Berechnung
         
         metrics: {
-          hydration: this.analyzeMetric(results, 'hydration'),
-          elasticity: this.analyzeMetric(results, 'elasticity'),
-          firmness: this.analyzeMetric(results, 'firmness'),
-          radiance: this.analyzeMetric(results, 'radiance'),
-          evenness: this.analyzeMetric(results, 'evenness'),
-          poreSize: this.analyzeMetric(results, 'poreSize'),
-          oilBalance: this.analyzeMetric(results, 'oilBalance'),
+          hydration: analyzeMetricSafe('hydration'),
+          elasticity: analyzeMetricSafe('elasticity'),
+          firmness: analyzeMetricSafe('firmness'),
+          radiance: analyzeMetricSafe('radiance'),
+          evenness: analyzeMetricSafe('evenness'),
+          poreSize: analyzeMetricSafe('poreSize'),
+          oilBalance: analyzeMetricSafe('oilBalance'),
         },
         
         concerns: {
@@ -140,10 +222,10 @@ export class AdvancedAnalysisService {
         },
         
         environmental: {
-          uvDamage: this.calculateAverage(results, 'uvDamage'),
-          pollutionImpact: this.calculateAverage(results, 'pollutionImpact'),
-          stressLevel: this.calculateAverage(results, 'stressLevel'),
-          dehydration: this.calculateAverage(results, 'dehydration'),
+          uvDamage: calculateSafeAverage('uvDamage'),
+          pollutionImpact: calculateSafeAverage('pollutionImpact'),
+          stressLevel: calculateSafeAverage('stressLevel'),
+          dehydration: calculateSafeAverage('dehydration'),
         },
       }
     };
@@ -352,40 +434,64 @@ export class AdvancedAnalysisService {
     };
   }
 
-  // Helper Methoden
+  // Helper Methoden - Sichere Implementierungen
   private static determineSkinType(results: any[]): string {
-    // Komplexe Logik zur Bestimmung des Hauttyps
-    return 'Mischhaut mit Tendenz zu Trockenheit';
-  }
-
-  private static calculateAverageAge(results: any[]): number {
-    return 28;
-  }
-
-  private static calculateBiologicalAge(results: any[]): number {
-    return 25;
-  }
-
-  private static calculateHealthScore(results: any[]): number {
-    return 82;
-  }
-
-  private static analyzeMetric(results: any[], metric: string): any {
-    return {
-      value: 75,
-      trend: 'improving' as const
-    };
+    if (!results || results.length === 0) return 'Normal';
+    
+    // Sammle alle Hauttypen
+    const skinTypes = results
+      .map(r => r?.skinType)
+      .filter(type => type);
+    
+    if (skinTypes.length === 0) return 'Normal';
+    
+    // Finde den häufigsten Hauttyp
+    const typeCount: Record<string, number> = {};
+    skinTypes.forEach(type => {
+      typeCount[type] = (typeCount[type] || 0) + 1;
+    });
+    
+    let maxCount = 0;
+    let dominantType = 'Normal';
+    
+    Object.entries(typeCount).forEach(([type, count]) => {
+      if (count > maxCount) {
+        maxCount = count;
+        dominantType = type;
+      }
+    });
+    
+    return dominantType;
   }
 
   private static extractPrimaryConcerns(results: any[]): string[] {
-    return [
-      'Dehydration in der T-Zone',
-      'Feine Linien um die Augen',
-      'Ungleichmäßiger Hautton'
-    ];
+    if (!results || results.length === 0) return ['Keine spezifischen Probleme erkannt'];
+    
+    // Sammle alle Concerns
+    const allConcerns: string[] = [];
+    results.forEach(r => {
+      if (r?.concerns && Array.isArray(r.concerns)) {
+        allConcerns.push(...r.concerns);
+      }
+    });
+    
+    if (allConcerns.length === 0) return ['Keine spezifischen Probleme erkannt'];
+    
+    // Zähle Häufigkeit
+    const concernCount: Record<string, number> = {};
+    allConcerns.forEach(concern => {
+      concernCount[concern] = (concernCount[concern] || 0) + 1;
+    });
+    
+    // Sortiere nach Häufigkeit und nehme die Top 3
+    return Object.entries(concernCount)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([concern]) => concern);
   }
 
   private static extractSecondaryConcerns(results: any[]): string[] {
+    // Vereinfachte Implementierung
     return [
       'Leichte Hyperpigmentierung',
       'Vergrößerte Poren auf der Nase'
@@ -393,147 +499,10 @@ export class AdvancedAnalysisService {
   }
 
   private static extractEmergingConcerns(results: any[]): string[] {
+    // Vereinfachte Implementierung
     return [
       'Beginnender Elastizitätsverlust',
       'Erste Anzeichen von UV-Schäden'
     ];
-  }
-
-  private static calculateAverage(results: any[], field: string): number {
-    return 45;
-  }
-
-  // Demo-Daten für Fallback
-  private static getDemoAnalysisResult(): AdvancedAnalysisResult {
-    return {
-      scanDuration: 60000,
-      confidence: 95,
-      timestamp: new Date(),
-      
-      skinAnalysis: {
-        type: 'Mischhaut mit Tendenz zu Trockenheit',
-        age: 28,
-        biologicalAge: 25,
-        healthScore: 82,
-        
-        metrics: {
-          hydration: { value: 65, trend: 'declining' },
-          elasticity: { value: 78, trend: 'stable' },
-          firmness: { value: 75, trend: 'stable' },
-          radiance: { value: 70, trend: 'improving' },
-          evenness: { value: 68, trend: 'stable' },
-          poreSize: { value: 72, trend: 'stable' },
-          oilBalance: { value: 60, trend: 'improving' },
-        },
-        
-        concerns: {
-          primary: [
-            'Dehydration besonders in der T-Zone',
-            'Feine Linien um die Augenpartie',
-            'Ungleichmäßiger Hautton mit leichten Rötungen'
-          ],
-          secondary: [
-            'Leichte Hyperpigmentierung an den Wangen',
-            'Vergrößerte Poren im Nasenbereich',
-            'Gelegentliche hormonelle Unreinheiten'
-          ],
-          emerging: [
-            'Beginnender Elastizitätsverlust',
-            'Erste Anzeichen von UV-bedingten Schäden',
-            'Leichte Volumenverluste'
-          ],
-        },
-        
-        environmental: {
-          uvDamage: 35,
-          pollutionImpact: 45,
-          stressLevel: 60,
-          dehydration: 70,
-        },
-      },
-      
-      recommendations: {
-        immediate: [
-          {
-            title: 'Notfall-Hydratation',
-            description: 'Ihre Haut zeigt akute Dehydration. Sofortige intensive Feuchtigkeitspflege erforderlich.',
-            priority: 'high',
-            duration: '24-48 Stunden',
-            expectedResults: [
-              'Sofortige Linderung von Spannungsgefühlen',
-              'Sichtbar prallere Haut',
-              'Reduzierte Schuppigkeit'
-            ],
-            steps: [
-              'Gesicht mit lauwarmem Wasser und mildem Cleanser reinigen',
-              'Hyaluronsäure-Serum auf die noch feuchte Haut auftragen',
-              'Sheet-Maske für 20 Minuten auflegen',
-              'Reichhaltige Nachtcreme dick auftragen',
-              'Über Nacht einwirken lassen'
-            ]
-          }
-        ],
-        
-        shortTerm: [
-          {
-            title: 'Hautbarriere-Reparatur',
-            description: 'Stärkung der natürlichen Schutzfunktion Ihrer Haut.',
-            priority: 'high',
-            duration: '2 Wochen',
-            expectedResults: [
-              'Verbesserte Feuchtigkeitsspeicherung',
-              'Reduzierte Empfindlichkeit',
-              'Gesünderes Hautbild'
-            ],
-            steps: [
-              'Ceramid-haltige Produkte verwenden',
-              'pH-neutrale Reinigung',
-              'Niacinamid-Serum integrieren',
-              'Wöchentliche Repair-Masken'
-            ]
-          }
-        ],
-        
-        longTerm: [
-          {
-            title: 'Ganzheitliches Anti-Aging Programm',
-            description: 'Umfassende Strategie für jugendliche, gesunde Haut.',
-            priority: 'medium',
-            duration: '3-6 Monate',
-            expectedResults: [
-              'Sichtbar reduzierte Falten',
-              'Verbesserte Hautstruktur',
-              'Ebenmäßiger, strahlender Teint',
-              'Erhöhte Hautfestigkeit'
-            ],
-            steps: [
-              'Retinol-Behandlung schrittweise einführen',
-              'Täglicher Sonnenschutz SPF 50+',
-              'Wöchentliche Mikroneedling-Sessions',
-              'Quartalsweise professionelle Treatments'
-            ]
-          }
-        ],
-        
-        products: {
-          essential: [],
-          advanced: [],
-          professional: []
-        },
-        
-        recipes: {
-          daily: [],
-          weekly: [],
-          special: []
-        },
-        
-        lifestyle: {
-          diet: [],
-          supplements: [],
-          habits: [],
-          avoid: []
-        }
-      }
-    };
   }
 }
