@@ -9,6 +9,16 @@ export class AdvancedAnalysisService {
   static async performDeepAnalysis(images: { uri: string; base64?: string }[]): Promise<AdvancedAnalysisResult> {
     const startTime = Date.now();
     
+    console.log('performDeepAnalysis called with:', {
+      imagesCount: images?.length || 0,
+      imagesStructure: images?.map((img, i) => ({
+        index: i,
+        hasUri: !!img?.uri,
+        hasBase64: !!img?.base64,
+        base64Length: img?.base64?.length || 0
+      }))
+    });
+    
     try {
       // Validiere Bilder
       if (!images || images.length === 0) {
@@ -20,7 +30,14 @@ export class AdvancedAnalysisService {
         .map(img => img.base64)
         .filter(base64 => base64 && base64.length > 100) as string[];
       
+      console.log('Valid base64 images found:', validImages.length);
+      
       if (validImages.length === 0) {
+        console.error('No valid images found. Image details:', images.map((img, i) => ({
+          index: i,
+          base64Present: !!img.base64,
+          base64Length: img.base64?.length || 0
+        })));
         throw new Error('Keine gültigen Bilder gefunden');
       }
 

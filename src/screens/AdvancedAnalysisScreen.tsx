@@ -62,7 +62,7 @@ export function AdvancedAnalysisScreen() {
     setShowScanner(true);
   };
 
-  const handleScanComplete = async (images: string[]) => {
+  const handleScanComplete = async (images: { uri: string; base64?: string }[]) => {
     setShowScanner(false);
     setIsAnalyzing(true);
     setAnalysisProgress(0);
@@ -106,7 +106,7 @@ export function AdvancedAnalysisScreen() {
     }
 
     try {
-      // Führe die tiefe Analyse durch
+      // Führe die tiefe Analyse durch - mit korrektem Datenformat
       const analysisResult = await AdvancedAnalysisService.performDeepAnalysis(images);
       
       setResults(analysisResult);
