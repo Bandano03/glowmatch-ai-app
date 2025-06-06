@@ -1,5 +1,7 @@
 // src/types/advancedAnalysis.types.ts
 
+import { TouchableOpacity } from 'react-native';
+
 export interface FaceScanPoint {
   x: number;
   y: number;

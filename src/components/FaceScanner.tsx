@@ -1,281 +1,293 @@
 // src/components/FaceScanner.tsx
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
-  StyleSheet,
-  Animated,
-  Dimensions,
   Text,
+  StyleSheet,
   TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
-import { CameraView, useCameraPermissions } from 'expo-camera'; // NEUE expo-camera API
-import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { Camera, CameraType } from 'expo-camera/legacy';
+import * as FaceDetector from 'expo-face-detector';
+import * as ImageManipulator from 'expo-image-manipulator';
+import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  interpolate,
+} from 'react-native-reanimated';
 
 const { width, height } = Dimensions.get('window');
-const SCAN_DURATION = 5000; // 5 Sekunden pro Scan
 
 interface FaceScannerProps {
-  onScanComplete: (images: string[]) => void;
-  onProgress: (progress: number) => void;
+  onScanComplete: (images: { uri: string; base64?: string }[]) => void;
+  onProgress?: (progress: number) => void;
 }
 
 export function FaceScanner({ onScanComplete, onProgress }: FaceScannerProps) {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [scanning, setScanning] = useState(false);
+  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [type, setType] = useState(CameraType.front);
+  const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
-  const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [capturedImages, setCapturedImages] = useState<{ uri: string; base64?: string }[]>([]);
+  const [faceDetected, setFaceDetected] = useState(false);
+  const [scanMessage, setScanMessage] = useState('Position your face in the circle');
   
-  const cameraRef = useRef<any>(null);
-  const scanLineAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const cameraRef = useRef<Camera>(null);
+  const scanAnimation = useSharedValue(0);
 
   useEffect(() => {
-    if (scanning) {
-      startScanAnimation();
-      captureMultipleImages();
+    (async () => {
+      const { status } = await Camera.requestCameraPermissionsAsync();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  useEffect(() => {
+    scanAnimation.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1500 }),
+        withTiming(0, { duration: 1500 })
+      ),
+      -1
+    );
+  }, []);
+
+  const animatedScannerStyle = useAnimatedStyle(() => {
+    const scale = interpolate(scanAnimation.value, [0, 1], [0.9, 1.1]);
+    const opacity = interpolate(scanAnimation.value, [0, 1], [0.3, 0.8]);
+    
+    return {
+      transform: [{ scale }],
+      opacity,
+    };
+  });
+
+  const handleFacesDetected = ({ faces }: { faces: FaceDetector.FaceFeature[] }) => {
+    if (faces.length > 0) {
+      setFaceDetected(true);
+      const face = faces[0];
+      
+      // Check if face is centered and properly sized
+      const faceCenterX = face.bounds.origin.x + face.bounds.size.width / 2;
+      const faceCenterY = face.bounds.origin.y + face.bounds.size.height / 2;
+      const screenCenterX = width / 2;
+      const screenCenterY = height / 2;
+      
+      const iscentered = 
+        Math.abs(faceCenterX - screenCenterX) < 50 &&
+        Math.abs(faceCenterY - screenCenterY) < 100;
+      
+      if (iscentered && !isScanning) {
+        setScanMessage('Perfect! Hold still...');
+      }
+    } else {
+      setFaceDetected(false);
+      setScanMessage('Position your face in the circle');
     }
-  }, [scanning]);
+  };
 
-  const startScanAnimation = () => {
-    // Scan-Linie Animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(scanLineAnim, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scanLineAnim, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Puls-Animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Rotation Animation
-    Animated.loop(
-      Animated.timing(rotateAnim, {
-        toValue: 1,
-        duration: 10000,
-        useNativeDriver: true,
-      })
-    ).start();
+  const startScanning = async () => {
+    if (!faceDetected || isScanning) return;
+    
+    setIsScanning(true);
+    setScanMessage('Scanning in progress...');
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Start capturing multiple images
+    await captureMultipleImages();
   };
 
   const captureMultipleImages = async () => {
-    const images: string[] = [];
-    const captureCount = 10; // 10 Bilder während des Scans
-    const interval = SCAN_DURATION / captureCount;
-
+    const images: { uri: string; base64?: string }[] = [];
+    const captureCount = 5; // Reduziert auf 5 Bilder für bessere Qualität
+    
     for (let i = 0; i < captureCount; i++) {
-      if (!scanning) break;
+      setScanProgress((i + 1) / captureCount);
+      onProgress?.((i + 1) / captureCount);
       
-      // Progress update
-      const progress = (i + 1) / captureCount;
-      setScanProgress(progress);
-      onProgress(progress);
+      // Update scan message
+      setScanMessage(`Capturing image ${i + 1}/${captureCount}...`);
+      
+      // Warte kurz vor der Aufnahme für besseren Fokus
+      await new Promise(resolve => setTimeout(resolve, 800));
       
       // Capture image
       if (cameraRef.current) {
         try {
-          // Simuliere Bildaufnahme für jetzt
-          // In einer echten App würden Sie hier takePictureAsync verwenden
-          const fakeImage = `fake-image-${i}`;
-          images.push(fakeImage);
+          console.log(`Capturing image ${i + 1}/${captureCount}...`);
           
-          // Haptic feedback
-          await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          // Bild aufnehmen mit besseren Einstellungen
+          const photo = await cameraRef.current.takePictureAsync({
+            quality: 1, // Maximale Qualität
+            skipProcessing: false,
+            base64: false,
+          });
+
+          if (photo && photo.uri) {
+            console.log('Photo captured, processing...');
+            
+            // Bild verarbeiten mit besserer Qualität
+            const manipulatedImage = await ImageManipulator.manipulateAsync(
+              photo.uri,
+              [{ resize: { width: 1500 } }], // Höhere Auflösung
+              { 
+                compress: 0.95, // Minimale Kompression
+                format: ImageManipulator.SaveFormat.JPEG 
+              }
+            );
+
+            // Zu Base64 konvertieren
+            const base64 = await FileSystem.readAsStringAsync(manipulatedImage.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+
+            console.log(`Image ${i + 1} processed, base64 length: ${base64.length}`);
+
+            if (base64 && base64.length > 0) {
+              images.push({
+                uri: manipulatedImage.uri,
+                base64: base64
+              });
+              
+              // Update captured images for preview
+              setCapturedImages([...images]);
+              
+              // Haptic feedback
+              await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            }
+          }
         } catch (error) {
-          console.error('Capture error:', error);
+          console.error(`Capture error for image ${i + 1}:`, error);
         }
       }
       
-      // Wait for next capture
-      await new Promise(resolve => setTimeout(resolve, interval));
+      // Längere Pause zwischen Aufnahmen für besseren Fokus
+      await new Promise(resolve => setTimeout(resolve, 1500));
     }
-
-    setCapturedImages(images);
-    onScanComplete(images);
-    setScanning(false);
+    
+    setScanMessage('Scan complete!');
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // Wait a moment before calling onScanComplete
+    setTimeout(() => {
+      if (images.length > 0) {
+        console.log(`Scan complete! Captured ${images.length} images`);
+        onScanComplete(images);
+      } else {
+        Alert.alert('Error', 'No images captured. Please try again.');
+        setIsScanning(false);
+        setScanProgress(0);
+        setCapturedImages([]);
+      }
+    }, 1000);
   };
 
-  const startScan = () => {
-    setScanning(true);
-    setScanProgress(0);
-    setCapturedImages([]);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  if (!permission) {
-    // Camera permissions are still loading
+  if (hasPermission === null) {
     return <View style={styles.container} />;
   }
-
-  if (!permission.granted) {
-    // Camera permissions are not granted yet
+  
+  if (hasPermission === false) {
     return (
       <View style={styles.container}>
-        <View style={styles.permissionContainer}>
-          <Text style={styles.permissionText}>
-            Wir benötigen Ihre Erlaubnis, um die Kamera zu verwenden
-          </Text>
-          <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-            <Text style={styles.permissionButtonText}>Erlaubnis erteilen</Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={styles.noPermissionText}>No access to camera</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <CameraView
+      <Camera
         ref={cameraRef}
         style={styles.camera}
-        facing="front"
+        type={type}
+        onFacesDetected={handleFacesDetected}
+        faceDetectorSettings={{
+          mode: FaceDetector.FaceDetectorMode.accurate,
+          detectLandmarks: FaceDetector.FaceDetectorLandmarks.all,
+          runClassifications: FaceDetector.FaceDetectorClassifications.all,
+          minDetectionInterval: 100,
+          tracking: true,
+        }}
       >
-        {/* Scan Overlay */}
-        <View style={styles.scanOverlay}>
-          {/* Face Guide */}
-          <View style={styles.faceGuide}>
-            <Animated.View
-              style={[
-                styles.faceOutline,
-                {
-                  transform: [
-                    { scale: pulseAnim },
-                    {
-                      rotate: rotateAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: ['0deg', '360deg'],
-                      }),
-                    },
-                  ],
-                },
-              ]}
-            >
-              <LinearGradient
-                colors={['transparent', '#6b46c1', 'transparent']}
-                style={styles.gradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              />
-            </Animated.View>
+        <View style={styles.overlay}>
+          {/* Top section */}
+          <View style={styles.topSection}>
+            <Text style={styles.title}>Face Scanner</Text>
+            <Text style={styles.subtitle}>{scanMessage}</Text>
+          </View>
 
-            {/* Scan Line */}
-            {scanning && (
-              <Animated.View
-                style={[
-                  styles.scanLine,
-                  {
-                    transform: [
-                      {
-                        translateY: scanLineAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [-150, 150],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
+          {/* Center scanning area */}
+          <View style={styles.scannerContainer}>
+            <Animated.View style={[styles.scanner, animatedScannerStyle]}>
+              <View style={styles.scannerInner}>
+                {/* Corner markers */}
+                <View style={[styles.corner, styles.topLeft]} />
+                <View style={[styles.corner, styles.topRight]} />
+                <View style={[styles.corner, styles.bottomLeft]} />
+                <View style={[styles.corner, styles.bottomRight]} />
+              </View>
+            </Animated.View>
+            
+            {faceDetected && (
+              <Ionicons 
+                name="checkmark-circle" 
+                size={32} 
+                color="#4CAF50" 
+                style={styles.faceDetectedIcon}
+              />
+            )}
+          </View>
+
+          {/* Bottom section */}
+          <View style={styles.bottomSection}>
+            {!isScanning ? (
+              <TouchableOpacity
+                style={[styles.captureButton, !faceDetected && styles.captureButtonDisabled]}
+                onPress={startScanning}
+                disabled={!faceDetected}
               >
                 <LinearGradient
-                  colors={['transparent', '#6b46c1', 'transparent']}
-                  style={styles.scanLineGradient}
-                  start={{ x: 0, y: 0.5 }}
-                  end={{ x: 1, y: 0.5 }}
-                />
-              </Animated.View>
-            )}
-
-            {/* Corner Markers */}
-            <View style={[styles.corner, styles.cornerTopLeft]} />
-            <View style={[styles.corner, styles.cornerTopRight]} />
-            <View style={[styles.corner, styles.cornerBottomLeft]} />
-            <View style={[styles.corner, styles.cornerBottomRight]} />
-          </View>
-
-          {/* Instructions */}
-          <View style={styles.instructions}>
-            <BlurView intensity={80} style={styles.instructionBlur}>
-              <Text style={styles.instructionText}>
-                {scanning
-                  ? `Scanvorgang läuft... ${Math.round(scanProgress * 100)}%`
-                  : 'Positionieren Sie Ihr Gesicht im Rahmen'}
-              </Text>
-              {scanning && (
+                  colors={faceDetected ? ['#6b46c1', '#8b5cf6'] : ['#ccc', '#999']}
+                  style={styles.captureButtonGradient}
+                >
+                  <Ionicons name="scan" size={32} color="#fff" />
+                  <Text style={styles.captureButtonText}>Start Scan</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.progressContainer}>
                 <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      { width: `${scanProgress * 100}%` },
-                    ]}
+                  <View 
+                    style={[styles.progressFill, { width: `${scanProgress * 100}%` }]} 
                   />
                 </View>
-              )}
-            </BlurView>
+                <Text style={styles.progressText}>
+                  {Math.round(scanProgress * 100)}% Complete
+                </Text>
+              </View>
+            )}
+
+            {/* Image preview */}
+            {capturedImages.length > 0 && (
+              <View style={styles.imagePreview}>
+                <Text style={styles.imagePreviewText}>
+                  {capturedImages.length} images captured
+                </Text>
+              </View>
+            )}
           </View>
-
-          {/* Scan Points */}
-          {scanning && (
-            <View style={styles.scanPoints}>
-              {[...Array(20)].map((_, i) => (
-                <Animated.View
-                  key={i}
-                  style={[
-                    styles.scanPoint,
-                    {
-                      left: `${20 + Math.random() * 60}%`,
-                      top: `${20 + Math.random() * 60}%`,
-                      opacity: scanLineAnim.interpolate({
-                        inputRange: [0, 0.5, 1],
-                        outputRange: [0, 1, 0],
-                      }),
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          )}
-
-          {/* Start Button */}
-          {!scanning && (
-            <TouchableOpacity
-              style={styles.startButton}
-              onPress={startScan}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#6b46c1', '#8b5cf6']}
-                style={styles.startButtonGradient}
-              >
-                <Text style={styles.startButtonText}>Scan starten</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-          )}
         </View>
-      </CameraView>
+      </Camera>
     </View>
   );
 }
@@ -288,155 +300,148 @@ const styles = StyleSheet.create({
   camera: {
     flex: 1,
   },
-  scanOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
-  faceGuide: {
-    width: 300,
-    height: 400,
-    justifyContent: 'center',
+  topSection: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
   },
-  faceOutline: {
-    width: 280,
-    height: 380,
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#fff',
+    opacity: 0.8,
+  },
+  scannerContainer: {
+    flex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scanner: {
+    width: width * 0.7,
+    height: width * 0.7,
+    borderRadius: width * 0.35,
     borderWidth: 3,
     borderColor: '#6b46c1',
-    borderRadius: 140,
-    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  gradient: {
-    flex: 1,
-    borderRadius: 140,
-  },
-  scanLine: {
-    position: 'absolute',
-    width: 300,
-    height: 2,
-  },
-  scanLineGradient: {
-    flex: 1,
+  scannerInner: {
+    width: '90%',
+    height: '90%',
+    borderRadius: width * 0.35,
+    position: 'relative',
   },
   corner: {
     position: 'absolute',
     width: 40,
     height: 40,
-    borderColor: '#6b46c1',
-    borderWidth: 3,
+    borderColor: '#fff',
   },
-  cornerTopLeft: {
+  topLeft: {
     top: 0,
     left: 0,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
     borderTopLeftRadius: 20,
   },
-  cornerTopRight: {
+  topRight: {
     top: 0,
     right: 0,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
     borderTopRightRadius: 20,
   },
-  cornerBottomLeft: {
+  bottomLeft: {
     bottom: 0,
     left: 0,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
     borderBottomLeftRadius: 20,
   },
-  cornerBottomRight: {
+  bottomRight: {
     bottom: 0,
     right: 0,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
     borderBottomRightRadius: 20,
   },
-  instructions: {
+  faceDetectedIcon: {
     position: 'absolute',
-    top: 100,
-    left: 20,
-    right: 20,
+    bottom: -50,
   },
-  instructionBlur: {
-    padding: 20,
-    borderRadius: 16,
+  bottomSection: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 50,
+  },
+  captureButton: {
+    borderRadius: 30,
     overflow: 'hidden',
   },
-  instructionText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
+  captureButtonDisabled: {
+    opacity: 0.5,
+  },
+  captureButtonGradient: {
+    paddingVertical: 16,
+    paddingHorizontal: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  captureButtonText: {
+    fontSize: 18,
     fontWeight: '600',
+    color: '#fff',
+  },
+  progressContainer: {
+    width: width * 0.8,
+    alignItems: 'center',
   },
   progressBar: {
-    height: 4,
+    width: '100%',
+    height: 8,
     backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 2,
-    marginTop: 12,
+    borderRadius: 4,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#6b46c1',
-    borderRadius: 2,
+    borderRadius: 4,
   },
-  scanPoints: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  scanPoint: {
-    position: 'absolute',
-    width: 4,
-    height: 4,
-    backgroundColor: '#6b46c1',
-    borderRadius: 2,
-  },
-  startButton: {
-    position: 'absolute',
-    bottom: 100,
-    borderRadius: 30,
-    overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-  },
-  startButtonGradient: {
-    paddingHorizontal: 40,
-    paddingVertical: 16,
-  },
-  startButtonText: {
+  progressText: {
+    fontSize: 16,
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    marginTop: 16,
   },
-  permissionContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
+  imagePreview: {
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 20,
   },
-  permissionText: {
+  imagePreviewText: {
+    fontSize: 14,
+    color: '#fff',
+  },
+  noPermissionText: {
     color: '#fff',
     fontSize: 18,
     textAlign: 'center',
-    marginBottom: 20,
-  },
-  permissionButton: {
-    backgroundColor: '#6b46c1',
-    paddingHorizontal: 30,
-    paddingVertical: 15,
-    borderRadius: 25,
-  },
-  permissionButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    marginTop: 100,
   },
 });
 
-// Export
 export default FaceScanner;
