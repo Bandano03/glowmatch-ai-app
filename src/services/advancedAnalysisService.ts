@@ -6,7 +6,7 @@ import { AdvancedAnalysisResult, ProductRecommendation, RecipeRecommendation } f
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 export class AdvancedAnalysisService {
-  static async performDeepAnalysis(images: string[]): Promise<AdvancedAnalysisResult> {
+  static async performDeepAnalysis(images: { uri: string; base64?: string }[]): Promise<AdvancedAnalysisResult> {
     const startTime = Date.now();
     
     try {
@@ -15,8 +15,10 @@ export class AdvancedAnalysisService {
         throw new Error('Keine Bilder vorhanden');
       }
 
-      // Filtere undefined/null Bilder heraus
-      const validImages = images.filter(img => img && img.length > 100);
+      // Extrahiere Base64-Strings und filtere ungültige heraus
+      const validImages = images
+        .map(img => img.base64)
+        .filter(base64 => base64 && base64.length > 100) as string[];
       
       if (validImages.length === 0) {
         throw new Error('Keine gültigen Bilder gefunden');
