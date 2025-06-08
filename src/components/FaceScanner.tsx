@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
-import { Camera, CameraType } from 'expo-camera/legacy';
+import { Camera, CameraType } from 'expo-camera'; // FIXED: Removed /legacy
 import * as FaceDetector from 'expo-face-detector';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system';
