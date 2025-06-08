@@ -1,4 +1,3 @@
-// app.config.js
 export default {
   expo: {
     name: "glowmatch-ai-app",
@@ -7,6 +6,7 @@ export default {
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
+    owner: "bandano",
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -25,7 +25,15 @@ export default {
     },
     plugins: [
       "expo-camera",
-      "expo-dev-client"
+      "expo-dev-client",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.22"
+          }
+        }
+      ]
     ],
     extra: {
       eas: {
