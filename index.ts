@@ -1,8 +1,8 @@
-import { registerRootComponent } from 'expo';
 
+// index.ts
+import { registerRootComponent } from 'expo';
 import App from './App';
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
+// registerRootComponent ruft AppRegistry.registerComponent('main', () => App) auf;
+// Es stellt auch sicher, dass die Umgebung korrekt eingerichtet wird
 registerRootComponent(App);
