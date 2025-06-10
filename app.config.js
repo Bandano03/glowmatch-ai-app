@@ -1,44 +1,44 @@
-export default {
-  expo: {
-    name: "glowmatch-ai-app",
-    slug: "glowmatch-ai-app",
-    version: "1.0.0",
-    orientation: "portrait",
-    icon: "./assets/icon.png",
-    userInterfaceStyle: "light",
-    owner: "bandano",
-    splash: {
-      image: "./assets/splash-icon.png",
-      resizeMode: "contain",
-      backgroundColor: "#ffffff"
+{
+  "expo": {
+    "name": "GlowMatch AI",
+    "slug": "glowmatch-ai-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
     },
-    ios: {
-      supportsTablet: true,
-      bundleIdentifier: "com.glowmatch.app"
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.glowmatch.app"
     },
-    android: {
-      adaptiveIcon: {
-        foregroundImage: "./assets/adaptive-icon.png",
-        backgroundColor: "#ffffff"
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
       },
-      package: "com.glowmatch.app"
+      "package": "com.glowmatch.app"
     },
-    plugins: [
-      "expo-camera",
-      "expo-dev-client",
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
       [
-        "expo-build-properties",
+        "expo-camera",
         {
-          "android": {
-            "kotlinVersion": "1.9.22"
-          }
+          "cameraPermission": "Diese App benötigt Kamerazugriff für Beauty-Analysen."
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Diese App benötigt Zugriff auf Ihre Fotos für Beauty-Analysen.",
+          "savePhotosPermission": "Diese App möchte Analysebilder in Ihrer Galerie speichern."
         }
       ]
-    ],
-    extra: {
-      eas: {
-        projectId: "ae2b467c-16f5-4312-9b6f-188a601fe889"
-      }
-    }
+    ]
   }
-};
+}
